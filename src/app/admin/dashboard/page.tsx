@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { TrendingUp, AlertTriangle, FileText, Activity } from "lucide-react";
+import { TrendingUp, AlertTriangle, FileText, Activity, ArrowUpRight } from "lucide-react";
 import AdminHeader from "@/components/AdminHeader";
 
 export default function AdminDashboard() {
@@ -92,15 +92,25 @@ export default function AdminDashboard() {
         {/* Global Transaction Ledger */}
         <div className="bg-white border border-slate-200/80 rounded-2xl shadow-[0_4px_20px_rgb(0,0,0,0.03)] overflow-hidden">
           
-          <div className="p-6 border-b border-slate-200/80 bg-slate-50/50">
-            <h2 className="text-base font-extrabold text-[#001C3D] flex items-center gap-2">
-              <FileText className="w-4 h-4 text-[#F58220]" />
-              <span>Global Financial Ledger</span>
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5 font-medium">
-              Real-time administrative view of all student payment attempts and automated review outcomes.
-            </p>
-          </div>
+     <div className="p-6 border-b border-slate-200/80 bg-slate-50/50 flex justify-between items-center">
+  <div className="flex flex-col gap-0.5">
+    <h2 className="text-base font-extrabold text-[#001C3D] flex items-center gap-2">
+      <FileText className="w-4 h-4 text-[#F58220]" />
+      <span>Student Payment Registry &amp; Audit Records</span>
+    </h2>
+    <p className="text-xs text-slate-500 font-medium">
+      Monitoring student financial status and automated bursary verification logs.
+    </p>
+  </div>
+  
+  <button 
+    onClick={() => router.push("/admin/transactions")}
+    className="px-4 py-2 bg-white border border-slate-200 hover:border-[#F58220] hover:text-[#F58220] text-[#001C3D] rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+  >
+    <span>View Full Registry</span>
+    <ArrowUpRight className="w-3.5 h-3.5" />
+  </button>
+</div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-sm">

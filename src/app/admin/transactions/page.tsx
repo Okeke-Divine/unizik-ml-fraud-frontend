@@ -2,8 +2,8 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import { Search, Filter, RefreshCw, FileText, AlertTriangle, CheckCircle2, XCircle, ArrowUpRight } from "lucide-react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { Search, Filter, RefreshCw, AlertTriangle, CheckCircle2, XCircle, ArrowUpRight } from "lucide-react";
 import AdminHeader from "@/components/AdminHeader";
 
 const FEE_CATEGORIES = [
@@ -17,14 +17,16 @@ const FEE_CATEGORIES = [
 
 const STATUS_OPTIONS = [
   { id: "ALL", label: "All Statuses" },
-  { id: "SUCCESS", label: "Cleared (SUCCESS)" },
-  { id: "PENDING", label: "Pending Processing" },
-  { id: "BLOCKED", label: "Intercepted (BLOCKED)" },
+  { id: "CLEARED", label: "Cleared" },
+  { id: "PENDING", label: "Pending" },
+  { id: "BLOCKED", label: "Blocked" },
 ];
 
 export default function AdminTransactionsPage() {
   const router = useRouter();
-  
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -34,12 +36,17 @@ export default function AdminTransactionsPage() {
   const [selectedStatus, setSelectedStatus] = useState("ALL");
   const [selectedCategory, setSelectedCategory] = useState("ALL");
 
+  // pagniation
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+
+  // 1. Updated fetchLedger to set the total pages state
   const fetchLedger = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const queryParams = new URLSearchParams();
+      const queryParams = new URLSearchParams({ page: currentPage.toString() });
       if (selectedStatus !== "ALL") queryParams.append("status", selectedStatus);
       if (selectedCategory !== "ALL") queryParams.append("category", selectedCategory);
       if (searchTerm.trim() !== "") queryParams.append("search", searchTerm.trim());
@@ -49,15 +56,41 @@ export default function AdminTransactionsPage() {
 
       if (res.ok && data.success) {
         setTransactions(data.transactions);
+        setTotalPages(data.pages); // CRITICAL: Updates the page UI
       } else {
-        setError(data.error || "Failed to retrieve bursary transaction records.");
+        setError(data.error || "Failed to retrieve records.");
       }
     } catch (err) {
-      setError("Network error while communicating with the administrative database.");
+      setError("Network error.");
     } finally {
       setLoading(false);
     }
-  }, [selectedStatus, selectedCategory, searchTerm]);
+  }, [selectedStatus, selectedCategory, searchTerm, currentPage]); // Added currentPage dependency
+
+  // 2. Add this useEffect to trigger fetch when page changes
+  useEffect(() => {
+    fetchLedger();
+  }, [fetchLedger]);
+
+  // Helper to update URL params
+  const updateParams = useCallback((newParams: Record<string, string | number | null>) => {
+    const params = new URLSearchParams(searchParams.toString());
+    
+    Object.entries(newParams).forEach(([key, value]) => {
+      if (value === null || value === "ALL" || value === "") {
+        params.delete(key);
+      } else {
+        params.set(key, value.toString());
+      }
+    });
+
+    // Reset to page 1 if searching/filtering, unless specifically updating page
+    if (newParams.search !== undefined || newParams.status !== undefined || newParams.category !== undefined) {
+      params.set("page", "1");
+    }
+
+    router.push(`${pathname}?${params.toString()}`);
+  }, [searchParams, pathname, router]);
 
   useEffect(() => {
     // Authorization Check
@@ -68,7 +101,7 @@ export default function AdminTransactionsPage() {
     }
     const parsedUser = JSON.parse(storedUser);
     const userRole = parsedUser.role || (parsedUser.username ? "BURSARY_DIRECTOR" : "STUDENT");
-    
+
     if (userRole !== "ADMIN" && userRole !== "BURSARY_DIRECTOR") {
       router.push("/dashboard");
       return;
@@ -85,18 +118,18 @@ export default function AdminTransactionsPage() {
 
   // Dynamic Ledger Metrics based on active view
   const totalClearedRevenue = transactions
-    .filter((tx) => tx.status === "SUCCESS" || tx.status === "PAID")
+    .filter((tx) => tx.status === "CLEARED")
     .reduce((sum, tx) => sum + (tx.amount || 0), 0);
 
-  const blockedCount = transactions.filter((tx) => tx.status === "BLOCKED" || tx.status === "DECLINED").length;
+  const blockedCount = transactions.filter((tx) => tx.status === "BLOCKED").length;
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-800 font-sans pb-16 selection:bg-[#001C3D] selection:text-white">
-      
+
       <AdminHeader />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
-        
+
         {/* Page Title & Context Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
@@ -319,6 +352,24 @@ export default function AdminTransactionsPage() {
                 )}
               </tbody>
             </table>
+
+            <div className="flex items-center justify-between p-4 border-t border-slate-100">
+              <button
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(p => p - 1)}
+                className="px-4 py-2 border rounded-xl text-xs font-bold disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <span className="text-xs font-bold">Page {currentPage} of {totalPages}</span>
+              <button
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(p => p + 1)}
+                className="px-4 py-2 border rounded-xl text-xs font-bold disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
           </div>
         </div>
 

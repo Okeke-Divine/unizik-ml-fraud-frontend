@@ -9,61 +9,44 @@ export async function GET(req: Request) {
     const status = searchParams.get('status');
     const category = searchParams.get('category');
     const search = searchParams.get('search');
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = 1;
 
     const whereClause: any = {};
 
-    // 1. Status Filter
     if (status && status !== 'ALL') {
-      whereClause.status = status;
-    }
+  // Directly map to your DB Enum: PENDING, CLEARED, BLOCKED, FAILED
+  whereClause.status = status; 
+}
 
-    // 2. Fee Category Filter
     if (category && category !== 'ALL') {
-      whereClause.invoice = {
-        category: category as any,
-      };
+      whereClause.invoice = { category: category as any };
     }
 
-    // 3. Search Filter (Matriculation No, Name, or Payment Reference)
     if (search && search.trim() !== '') {
       whereClause.OR = [
         { reference: { contains: search } },
         { student: { matricNumber: { contains: search } } },
-        { student: { lastName: { contains: search } } },
-        { student: { firstName: { contains: search } } },
       ];
     }
 
-    const transactions = await prisma.transaction.findMany({
-      where: whereClause,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        student: {
-          select: {
-            matricNumber: true,
-            firstName: true,
-            lastName: true,
-            department: true,
-            level: true,
-          },
+    const [transactions, total] = await Promise.all([
+      prisma.transaction.findMany({
+        where: whereClause,
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: (page - 1) * limit,
+        include: {
+          student: { select: { matricNumber: true, firstName: true, lastName: true } },
+          invoice: { select: { category: true } },
+          auditLog: true,
         },
-        invoice: {
-          select: {
-            category: true,
-            session: true,
-            amount: true,
-          },
-        },
-        auditLog: true,
-      },
-    });
+      }),
+      prisma.transaction.count({ where: whereClause })
+    ]);
 
-    return NextResponse.json({ success: true, transactions }, { status: 200 });
+    return NextResponse.json({ success: true, transactions, total, pages: Math.ceil(total / limit) }, { status: 200 });
   } catch (error: any) {
-    console.error("[ADMIN LEDGER ERROR]:", error.message);
-    return NextResponse.json(
-      { success: false, error: "Failed to load bursary transaction records." },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

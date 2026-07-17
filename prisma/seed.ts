@@ -32,7 +32,7 @@ async function main() {
   // 3. Create Student 1: Normal Undergraduate Profile (Chinedu)
   const student1 = await prisma.student.create({
     data: {
-      matricNumber: '2022/184042',
+      matricNumber: '2022514001',
       email: 'c.okafor@unizik.edu.ng',
       password: defaultPasswordHash,
       firstName: 'Chinedu',
@@ -56,7 +56,7 @@ async function main() {
   // 4. Create Student 2: High-Risk Attack Target Profile (Sohail)
   const student2 = await prisma.student.create({
     data: {
-      matricNumber: '2022/184099',
+      matricNumber: '2022514009',
       email: 'sohail.sec@unizik.edu.ng',
       password: defaultPasswordHash,
       firstName: 'Sohail',
