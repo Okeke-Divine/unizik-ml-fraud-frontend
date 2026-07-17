@@ -95,6 +95,11 @@ export async function evaluatePaymentTransaction(
       is_off_peak_hour: offPeakFlag,
     };
 
+    console.log("--------------------------------------------------");
+    console.log("[TELEMETRY] Sending 6-param vector to Python AI:");
+    console.log(JSON.stringify(mlPayload, null, 2));
+    console.log("--------------------------------------------------");
+
     // 4. DISPATCH TO PYTHON FLASK MICROSERVICE
     const mlEndpoint = process.env.ML_ENGINE_URL || 'http://127.0.0.1:5000/api/predict';
     let aiVerdict = 'LEGITIMATE';

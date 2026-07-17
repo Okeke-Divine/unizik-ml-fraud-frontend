@@ -18,7 +18,12 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const studentId = searchParams.get('studentId');
-
+    const invoiceId = searchParams.get('invoiceId');
+    
+    if (invoiceId) {
+        const invoice = await prisma.feeInvoice.findUnique({ where: { id: invoiceId } });
+        return NextResponse.json({ success: true, invoice });
+    }
     if (!studentId) {
       return NextResponse.json({ success: false, error: "Student UUID is required." }, { status: 400 });
     }
