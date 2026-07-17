@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { CreditCard, FileText, Plus, CheckCircle, Clock, LogOut, User, ShieldCheck, AlertCircle, Shield, Cpu } from "lucide-react";
+import StudentHeader from "@/components/StudentHeader";
 
 interface Invoice {
   id: string;
@@ -47,11 +48,6 @@ export default function StudentDashboard() {
       .finally(() => setLoading(false));
   }, [router]);
 
-  const handleLogout = () => {
-    localStorage.removeItem("unizik_user");
-    router.push("/login");
-  };
-
   if (loading || !user) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center text-slate-600 font-sans">
@@ -72,58 +68,7 @@ export default function StudentDashboard() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-800 font-sans pb-16 selection:bg-[#001C3D] selection:text-white">
       
-      {/* Top Academic Research Notice Bar */}
-      <div className="bg-[#001C3D] text-white px-4 py-1.5 text-center text-[11px] font-medium tracking-wide flex items-center justify-center gap-2">
-        <Cpu className="w-3.5 h-3.5 text-[#F58220] shrink-0" />
-        <span>Predictive Fraud Detection System for University E-payment Portals | OKEKE DIVINE-VESSEL</span>
-      </div>
-
-      {/* Institutional Navigation Header */}
-      <header className="bg-white border-b border-slate-200/80 sticky top-0 z-20 shadow-[0_2px_15px_rgb(0,0,0,0.03)]">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-          
-          {/* Brand & Logo Section */}
-          <div className="flex items-center gap-3.5">
-            <img 
-              src="/UNIZIK_Main_Logo_.png" 
-              alt="UNIZIK Crest" 
-              className="h-11 object-contain"
-              onError={(e) => {
-                e.currentTarget.style.display = 'none';
-                e.currentTarget.nextElementSibling?.classList.remove('hidden');
-              }}
-            />
-            <div className="hidden flex items-center justify-center w-10 h-10 rounded-xl bg-[#001C3D] text-white shadow-md">
-              <Shield className="w-5 h-5 text-[#F58220]" />
-            </div>
-            <div>
-              <span className="font-extrabold tracking-tight text-[#001C3D] block text-base sm:text-lg leading-tight">
-                NNAMDI AZIKIWE UNIVERSITY
-              </span>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-[#F58220] block mt-0.5">
-                Undergraduate Financial Hub
-              </span>
-            </div>
-          </div>
-
-          {/* User Profile & Logout Controls */}
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2 text-xs font-semibold text-slate-700 bg-slate-100/80 px-3.5 py-2 rounded-xl border border-slate-200/80">
-              <User className="w-3.5 h-3.5 text-[#001C3D]" />
-              <span>{user.name}</span>
-              <span className="text-slate-400 font-mono">({user.matricNumber})</span>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="px-3.5 py-2 text-slate-600 hover:text-white hover:bg-rose-600 rounded-xl transition-all duration-200 flex items-center gap-1.5 text-xs font-bold border border-slate-200/80 hover:border-rose-600 shadow-sm"
-              title="Sign Out"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Sign Out</span>
-            </button>
-          </div>
-        </div>
-      </header>
+      <StudentHeader user={user} />
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
         
@@ -159,7 +104,7 @@ export default function StudentDashboard() {
             </div>
             <div className="text-[11px] font-semibold text-slate-500 mt-4 flex items-center gap-1.5 border-t border-slate-100 pt-3">
               <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
-              <span>Verified in institutional SQLite audit ledger</span>
+              <span>Verified in Bursary records</span>
             </div>
           </div>
 
@@ -202,12 +147,8 @@ export default function StudentDashboard() {
                 <span>Student Billing &amp; Transaction Ledger</span>
               </h2>
               <p className="text-xs text-slate-500 mt-0.5 font-medium">
-                All generated invoices are cryptographically bound to your student UUID and monitored by machine learning guardrails.
+                All invoices are linked to your student profile and monitored by the fraud detection system.
               </p>
-            </div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200/60 text-emerald-700 text-[11px] font-bold shrink-0">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              <span>AI Guardrails Active</span>
             </div>
           </div>
 
@@ -225,7 +166,7 @@ export default function StudentDashboard() {
                     <th className="py-3.5 px-6">Academic Session</th>
                     <th className="py-3.5 px-6">Amount Due</th>
                     <th className="py-3.5 px-6">Payment Status</th>
-                    <th className="py-3.5 px-6 text-right">Execution Action</th>
+                    <th className="py-3.5 px-6 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs font-medium">

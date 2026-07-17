@@ -73,8 +73,11 @@ export async function POST(req: Request) {
 
     // 1. FINANCIAL INTEGRITY GUARDRAIL
     const invoice = await prisma.feeInvoice.findUnique({ where: { id: payload.invoiceId } });
-    if (!invoice || invoice.studentId !== payload.studentId || invoice.amount !== payload.amount || invoice.status === 'PAID') {
+    if (!invoice || invoice.studentId !== payload.studentId || invoice.amount !== payload.amount) {
       return NextResponse.json({ success: false, error: "Invalid or Tampered Invoice" }, { status: 403 });
+    }
+    if (invoice.status === 'PAID') {
+      return NextResponse.json({ success: false, error: "This fee invoice has already been cleared and marked as PAID in the university records." }, { status: 400 });
     }
 
     // 2. DISPATCH TO ML ENGINE

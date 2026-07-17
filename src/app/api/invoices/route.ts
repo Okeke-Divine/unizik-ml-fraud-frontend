@@ -61,6 +61,24 @@ export async function POST(req: Request) {
 
     const amount = OFFICIAL_FEE_SCHEDULE[category as FeeCategory];
 
+    // Check if this fee has already been paid and cleared for the selected session
+    const existingPaid = await prisma.feeInvoice.findFirst({
+      where: {
+        studentId,
+        category: category as FeeCategory,
+        session,
+        status: InvoiceStatus.PAID,
+      },
+    });
+
+    if (existingPaid) {
+      return NextResponse.json({
+        success: false,
+        error: "This fee category has already been paid and cleared for the selected academic session.",
+        isCleared: true,
+      }, { status: 400 });
+    }
+
     // Check if an unpaid invoice already exists for this exact fee and session
     const existingPending = await prisma.feeInvoice.findFirst({
       where: {
