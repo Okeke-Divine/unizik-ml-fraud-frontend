@@ -36,10 +36,10 @@ async function getNetworkRiskScore(ip: string): Promise<number> {
 
     const ispName = data.isp.toUpperCase();
     const telcos = ["MTN", "GLOBACOM", "AIRTEL", "9MOBILE", "ETISALAT"];
-    
+
     // Check if the ISP string includes any of our whitelisted Nigerian Telcos
     const isLocalTelco = telcos.some(telco => ispName.includes(telco));
-    
+
     return isLocalTelco ? 0 : 1; // 0 = Safe (Local), 1 = Risky (VPN/Foreign/Other)
   } catch (e) {
     console.error("[NETWORK DETECTION ERROR]", e);
@@ -83,11 +83,30 @@ export async function POST(req: Request) {
     // 2. DISPATCH TO ML ENGINE
     const engineResult = await evaluatePaymentTransaction(payload);
 
+    // Use upsert to prevent "Unique constraint failed" on reference collisions
+    // and fix the status enum to match your schema ('CLEARED' vs 'SUCCESS')
+    const tx = await prisma.transaction.upsert({
+      where: { reference: payload.reference },
+      update: {},
+      create: {
+        invoiceId: payload.invoiceId,
+        studentId: payload.studentId,
+        amount: payload.amount,
+        reference: payload.reference,
+        deviceId: payload.deviceId,
+        ipAddress: payload.ipAddress,
+        asnNumber: payload.asnNumber,
+        pageDwellTime: payload.pageDwellTime,
+        hardwareMismatch: payload.hardwareMismatch,
+        status: engineResult.verdict === 'FRAUDULENT' ? 'BLOCKED' : 'CLEARED'
+      }
+    });
+
     if (engineResult.verdict === 'FRAUDULENT') {
       return NextResponse.json({ success: false, message: "Blocked", forensicReport: engineResult }, { status: 403 });
     }
 
-    return NextResponse.json({ success: true, message: "Authorized", data: engineResult }, { status: 200 });
+    return NextResponse.json({ success: true, message: "Authorized", data: { id: tx.id } }, { status: 200 });
   } catch (error: any) {
     console.error("[CHECKOUT ROUTE ERROR]:", error.message);
     return NextResponse.json({ success: false, error: "Internal Error" }, { status: 500 });

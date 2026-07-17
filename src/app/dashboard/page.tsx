@@ -13,7 +13,7 @@ interface Invoice {
   session: string;
   status: "PENDING" | "PAID" | "CANCELLED";
   createdAt: string;
-  transactions: Array<{ status: string }>;
+  transactions: Array<{ id: string; status: string; reference?: string }>;
 }
 
 export default function StudentDashboard() {
@@ -196,13 +196,21 @@ export default function StudentDashboard() {
                         </td>
                         <td className="py-4 px-6 text-right font-sans">
                           {isPaid ? (
-                            <span className="text-slate-400 text-xs font-semibold italic inline-flex items-center gap-1 justify-end">
-                              <ShieldCheck className="w-3.5 h-3.5 text-slate-400" /> Verified
-                            </span>
+                            <button
+                              onClick={() => {
+                                // Fallback to invoice ID if specific transaction ID isn't mapped
+                                const txId = inv.transactions?.[0]?.id || (inv as any).reference || inv.id;
+                                router.push(`/receipt/${txId}`);
+                              }}
+                              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white rounded-xl font-bold text-xs transition-all duration-200 shadow-2xs flex items-center gap-1.5 ml-auto cursor-pointer"
+                            >
+                              <FileText className="w-3.5 h-3.5" />
+                              <span>View Receipt</span>
+                            </button>
                           ) : (
                             <button
                               onClick={() => router.push(`/checkout/${inv.id}`)}
-                              className="px-4 py-2 bg-[#F58220] hover:bg-[#d97016] active:scale-[0.98] text-white rounded-xl font-bold text-xs transition-all duration-200 shadow-sm shadow-orange-500/20 flex items-center gap-1.5 ml-auto"
+                              className="px-4 py-2 bg-[#F58220] hover:bg-[#d97016] active:scale-[0.98] text-white rounded-xl font-bold text-xs transition-all duration-200 shadow-sm shadow-orange-500/20 flex items-center gap-1.5 ml-auto cursor-pointer"
                             >
                               <CreditCard className="w-3.5 h-3.5" />
                               <span>Pay Now</span>

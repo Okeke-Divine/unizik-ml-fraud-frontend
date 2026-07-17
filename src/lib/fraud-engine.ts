@@ -45,7 +45,7 @@ function isOffPeakHourWAT(): number {
 }
 
 /**
- * RUTHLESS AGGREGATION ENGINE
+ * AGGREGATION ENGINE
  * Intercepts checkout requests, computes behavioral velocity against the SQLite ledger,
  * evaluates risk via Python AI, and logs immutable audit records.
  */

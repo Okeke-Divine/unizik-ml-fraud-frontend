@@ -1,7 +1,7 @@
 // unizik-ml-fraud-frontend/src/lib/fingerprint.ts
 
 /**
- * RUTHLESS HARDWARE FINGERPRINT GENERATOR
+ * HARDWARE FINGERPRINT GENERATOR
  * Silently extracts immutable browser and machine characteristics,
  * compiling them into a SHA-256 cryptographic hardware signature.
  */

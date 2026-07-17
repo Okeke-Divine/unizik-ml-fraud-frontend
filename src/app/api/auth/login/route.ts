@@ -35,7 +35,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: "Invalid Matriculation Number or Password." }, { status: 401 });
     }
 
-    // RUTHLESS SECURITY ACTION: Update stored loginDeviceId baseline if provided by frontend
+    // SECURITY ACTION: Update stored loginDeviceId baseline if provided by frontend
     if (deviceId) {
       await prisma.student.update({
         where: { id: student.id },

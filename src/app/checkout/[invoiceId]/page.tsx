@@ -74,7 +74,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: 
       studentId: user.id,
       invoiceId: invoiceId,
       amount: invoice.amount || 0,
-      reference: `PAY_${Math.random().toString(36).substring(7).toUpperCase()}`,
+      reference: `PAY_${Date.now().toString(36).toUpperCase()}_${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
       deviceId: deviceId,
       pageDwellTime: dwellTime,
       hardwareMismatch: mismatch,
@@ -90,7 +90,8 @@ export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: 
       const data = await res.json();
 
       if (res.ok && data.success) {
-        router.push("/dashboard");
+        const txId = data.data.id; 
+        router.push(`/receipt/${txId}`);
       } else {
         setPaymentError(data.error || data.message || "Transaction declined by payment review. Please visit the Bursary desk.");
       }

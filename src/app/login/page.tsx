@@ -34,11 +34,15 @@ export default function LoginPage() {
 
       const data = await res.json();
       if (res.ok && data.success) {
-        // Save user profile to local storage for quick UI rendering
-        localStorage.setItem("unizik_user", JSON.stringify(data.user));
+        // RUTHLESS FIX: Explicitly embed the role into the localStorage object so it can never be undefined
+        const userProfile = {
+          ...data.user,
+          role: data.role || data.user?.role || (isAdmin ? "BURSARY_DIRECTOR" : "STUDENT")
+        };
+        localStorage.setItem("unizik_user", JSON.stringify(userProfile));
         
         // Redirect to appropriate domain
-        if (data.role === "ADMIN") {
+        if (userProfile.role === "ADMIN" || userProfile.role === "BURSARY_DIRECTOR") {
           router.push("/admin/dashboard");
         } else {
           router.push("/dashboard");
