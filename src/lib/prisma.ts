@@ -1,4 +1,4 @@
-// unizik-ml-fraud-frontend/src/lib/prisma.ts
+// src/lib/prisma.ts
 
 import { PrismaClient } from '@prisma/client';
 
