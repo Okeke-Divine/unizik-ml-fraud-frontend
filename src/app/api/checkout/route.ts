@@ -1,109 +1,92 @@
 // unizik-ml-fraud-frontend/src/app/api/checkout/route.ts
 
 import { NextResponse } from 'next/server';
+import { headers } from 'next/headers';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { evaluatePaymentTransaction } from '@/lib/fraud-engine';
 
-// Strict input validation schema to prevent malformed or injection payloads
+// Payload schema: Client reports what it can measure (timing, fingerprinting).
+// Server detects what it can prove (IP, ASN/Telco, Location).
 const checkoutSchema = z.object({
-  studentId: z.string().uuid("Invalid Student UUID format"),
-  invoiceId: z.string().uuid("Invalid Invoice UUID format"),
-  amount: z.number().positive("Amount must be greater than zero"),
-  reference: z.string().min(6, "Payment reference must be at least 6 characters"),
-  deviceId: z.string().min(8, "Hardware fingerprint ID required"),
-  ipAddress: z.string().default("127.0.0.1"),
-  asnNumber: z.number().int().min(0).max(1).default(0),
-  pageDwellTime: z.number().positive("Page dwell time must be a positive number"),
-  hardwareMismatch: z.number().int().min(0).max(1).default(0),
+  studentId: z.string().uuid(),
+  invoiceId: z.string().uuid(),
+  amount: z.number().positive(),
+  reference: z.string().min(6),
+  deviceId: z.string().min(8),
+  pageDwellTime: z.number().positive(),
+  hardwareMismatch: z.number().int().min(0).max(1),
 });
+
+/**
+ * PRODUCTION NETWORK DETECTOR
+ * Detects if the user is on a Nigerian Telco (MTN, Glo, Airtel, 9Mobile).
+ * If not, flags as high risk (asnNumber = 1).
+ */
+async function getNetworkRiskScore(ip: string): Promise<number> {
+  // 1. Localhost Handling
+  if (ip === "127.0.0.1" || ip === "::1" || ip.startsWith("192.168.")) return 0; // Safe in dev
+
+  try {
+    // Using free, no-key API: ip-api.com
+    const response = await fetch(`http://ip-api.com/json/${ip}?fields=status,isp,query`);
+    const data = await response.json();
+
+    if (data.status !== "success") return 1; // Flag as risk if we can't resolve IP
+
+    const ispName = data.isp.toUpperCase();
+    const telcos = ["MTN", "GLOBACOM", "AIRTEL", "9MOBILE", "ETISALAT"];
+    
+    // Check if the ISP string includes any of our whitelisted Nigerian Telcos
+    const isLocalTelco = telcos.some(telco => ispName.includes(telco));
+    
+    return isLocalTelco ? 0 : 1; // 0 = Safe (Local), 1 = Risky (VPN/Foreign/Other)
+  } catch (e) {
+    console.error("[NETWORK DETECTION ERROR]", e);
+    return 1; // Default to risky if detection fails
+  }
+}
 
 export async function POST(req: Request) {
   try {
+    const headersList = await headers();
+    // Get real IP from headers
+    const rawIp = headersList.get('x-forwarded-for') || '127.0.0.1';
+    const ipAddress = rawIp.split(',')[0]; // Handle proxy chains
+
     const body = await req.json();
     const validation = checkoutSchema.safeParse(body);
 
     if (!validation.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Payload Validation Failed",
-          details: validation.error.format(),
-        },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: "Validation Failed", details: validation.error }, { status: 400 });
     }
 
-    const payload = validation.data;
+    // Server-side network risk assessment
+    const asnNumber = await getNetworkRiskScore(ipAddress);
 
-    // 1. FINANCIAL INTEGRITY GUARDRAIL: Verify Invoice Exists & Match Amounts
-    // Prevents attackers from modifying fee amounts via browser developer tools
-    const invoice = await prisma.feeInvoice.findUnique({
-      where: { id: payload.invoiceId },
-    });
+    // Merge client telemetry with server-derived network metadata
+    const payload = {
+      ...validation.data,
+      ipAddress,
+      asnNumber, // ENFORCED: Server overrides client's asnNumber
+    };
 
-    if (!invoice) {
-      return NextResponse.json(
-        { success: false, error: "Target invoice not found in university ledger." },
-        { status: 404 }
-      );
+    // 1. FINANCIAL INTEGRITY GUARDRAIL
+    const invoice = await prisma.feeInvoice.findUnique({ where: { id: payload.invoiceId } });
+    if (!invoice || invoice.studentId !== payload.studentId || invoice.amount !== payload.amount || invoice.status === 'PAID') {
+      return NextResponse.json({ success: false, error: "Invalid or Tampered Invoice" }, { status: 403 });
     }
 
-    if (invoice.studentId !== payload.studentId) {
-      return NextResponse.json(
-        { success: false, error: "Invoice does not belong to the specified student identity." },
-        { status: 403 }
-      );
-    }
-
-    if (invoice.amount !== payload.amount) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "TAMPER DETECTED: Payload amount does not match ledger invoice amount.",
-          expectedAmount: invoice.amount,
-          receivedAmount: payload.amount,
-        },
-        { status: 403 }
-      );
-    }
-
-    if (invoice.status === 'PAID') {
-      return NextResponse.json(
-        { success: false, error: "This invoice has already been cleared and marked as PAID." },
-        { status: 400 }
-      );
-    }
-
-    // 2. DISPATCH TO AGGREGATION & AI FRAUD ENGINE
+    // 2. DISPATCH TO ML ENGINE
     const engineResult = await evaluatePaymentTransaction(payload);
 
-    // If blocked by AI or Heuristic, return HTTP 403 Forbidden with forensic explanation
     if (engineResult.verdict === 'FRAUDULENT') {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Payment intercepted and terminated by security engine.",
-          forensicReport: engineResult,
-        },
-        { status: 403 }
-      );
+      return NextResponse.json({ success: false, message: "Blocked", forensicReport: engineResult }, { status: 403 });
     }
 
-    // 3. TRANSACTION CLEARED CLEANLY
-    return NextResponse.json(
-      {
-        success: true,
-        message: "Payment authorized. Invoice marked as PAID in ledger.",
-        data: engineResult,
-      },
-      { status: 200 }
-    );
+    return NextResponse.json({ success: true, message: "Authorized", data: engineResult }, { status: 200 });
   } catch (error: any) {
     console.error("[CHECKOUT ROUTE ERROR]:", error.message);
-    return NextResponse.json(
-      { success: false, error: "Internal Server Error during checkout processing." },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: "Internal Error" }, { status: 500 });
   }
 }

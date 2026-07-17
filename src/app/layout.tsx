@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Predictive Fraud Detection System for University E-payment Portals",
+  title: "Predictive Fraud Detection System for University E-payment Portals | OKEKE DIVINE-VESSEL",
 };
 
 export default function RootLayout({

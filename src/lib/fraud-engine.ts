@@ -138,7 +138,7 @@ export async function evaluatePaymentTransaction(
       isErrorFallback = true;
       
       // Heuristic fallback: Block if there are excessive failures or VPN + Hardware mismatch
-      if (failedAttempts1h >= 3 || (payload.hardwareMismatch === 1 && payload.asnNumber === 1)) {
+      if (failedAttempts1h >= 9 || (payload.hardwareMismatch === 1 && payload.asnNumber === 1)) {
         aiVerdict = 'FRAUDULENT';
         aiConfidence = 0.9999;
         aiExplanation = 'BLOCKED BY FALLBACK HEURISTIC: High failure rate or session hijack detected while AI service was offline.';
