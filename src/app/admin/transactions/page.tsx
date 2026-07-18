@@ -19,7 +19,6 @@ const FEE_CATEGORIES = [
 const STATUS_OPTIONS = [
   { id: "ALL", label: "All Statuses" },
   { id: "CLEARED", label: "Cleared" },
-  { id: "PENDING", label: "Pending" },
   { id: "BLOCKED", label: "Blocked" },
 ];
 
@@ -256,6 +255,7 @@ export default function AdminTransactionsPage() {
                   transactions.map((tx) => {
                     const isSuccess = tx.status === "CLEARED" || tx.status === "PAID";
                     const isBlocked = tx.status === "BLOCKED" || tx.status === "DECLINED";
+                    const isPending = tx.status === "PENDING";
 
                     return (
                       <tr key={tx.id} className="hover:bg-blue-50/40 transition-colors duration-150">
@@ -302,19 +302,22 @@ export default function AdminTransactionsPage() {
                               <span>Blocked</span>
                             </span>
                           )}
-                          {!isSuccess && !isBlocked && (
+                          {isPending && (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold uppercase tracking-wider">
-                              <span>{tx.status || "Pending"}</span>
+                              <AlertTriangle className="w-3 h-3 text-amber-600" />
+                              <span>Pending</span>
                             </span>
                           )}
                         </td>
 
-                        <td className="py-4 px-6 text-slate-600 max-w-[220px] truncate" title={tx.auditLog?.explanation || "Standard Clearance Processed"}>
-                          <span className={isBlocked ? "font-semibold text-rose-700" : ""}>
-                            {tx.auditLog?.explanation || "Standard Clearance Processed"}
+                        {/* Remark Cell */}
+                        <td className="py-4 px-6 text-slate-600 max-w-[220px] truncate" title={tx.auditLog?.explanation || (isPending ? "Awaiting Gateway Processing" : "Standard Clearance Processed")}>
+                          <span className={isBlocked ? "font-semibold text-rose-700" : isPending ? "font-medium text-amber-600" : ""}>
+                            {tx.auditLog?.explanation || (isPending ? "Awaiting Gateway Processing" : "Standard Clearance Processed")}
                           </span>
                         </td>
 
+                        {/* action cell */}
                         <td className="py-4 px-6 text-right whitespace-nowrap">
                           <div className="flex items-center justify-end gap-2">
                             {isSuccess && (
@@ -329,8 +332,8 @@ export default function AdminTransactionsPage() {
                             <button
                               onClick={() => router.push(`/admin/forensics/${tx.id}`)}
                               className={`px-3 py-1.5 font-bold rounded-lg text-[11px] transition-all inline-flex items-center gap-1 cursor-pointer shadow-2xs ${isBlocked
-                                  ? "bg-rose-600 hover:bg-rose-700 text-white shadow-rose-500/20"
-                                  : "bg-[#001C3D] hover:bg-[#00152e] text-white"
+                                ? "bg-rose-600 hover:bg-rose-700 text-white shadow-rose-500/20"
+                                : "bg-[#001C3D] hover:bg-[#00152e] text-white"
                                 }`}
                               title="Inspect White-Box AI Forensics"
                             >

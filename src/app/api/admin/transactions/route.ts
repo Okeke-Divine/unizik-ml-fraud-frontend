@@ -15,9 +15,17 @@ export async function GET(req: Request) {
     const whereClause: any = {};
 
     if (status && status !== 'ALL') {
-  // Directly map to your DB Enum: PENDING, CLEARED, BLOCKED, FAILED
-  whereClause.status = status; 
-}
+      // Ensure we map the frontend dropdown strings to the exact DB Enums
+      if (status === 'CLEARED') {
+        whereClause.status = 'CLEARED';
+      } else if (status === 'BLOCKED') {
+        whereClause.status = 'BLOCKED';
+      } else if (status === 'PENDING') {
+        whereClause.status = 'PENDING';
+      } else if (status === 'FAILED') {
+        whereClause.status = 'FAILED';
+      }
+    }
 
     if (category && category !== 'ALL') {
       whereClause.invoice = { category: category as any };
