@@ -134,8 +134,13 @@ export default function AdminDashboard() {
                   data.transactions?.map((tx: any) => {
                     const isBlocked = tx.status === 'BLOCKED' || tx.status === 'DECLINED';
                     return (
-                      <tr key={tx.id} className="hover:bg-blue-50/40 transition-colors duration-150">
-                        <td className="py-4 px-6 text-slate-500 font-mono">
+                      <tr 
+                        key={tx.id} 
+                        onClick={() => router.push(`/admin/forensics/${tx.id}`)}
+                        className="hover:bg-blue-50/60 transition-colors duration-150 cursor-pointer group"
+                        title="Click row to inspect White-Box XAI forensic report"
+                      >
+                        <td className="py-4 px-6 text-slate-500 font-mono group-hover:text-[#001C3D] transition-colors">
                           {new Date(tx.createdAt).toLocaleString("en-NG", { 
                             month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" 
                           })}
@@ -144,7 +149,7 @@ export default function AdminDashboard() {
                           {tx.student?.matricNumber || "N/A"}
                         </td>
                         <td className="py-4 px-6 font-extrabold text-slate-900 font-mono">
-                          {tx.amount.toLocaleString("en-NG", { minimumFractionDigits: 2 })}
+                          ₦{tx.amount.toLocaleString("en-NG", { minimumFractionDigits: 2 })}
                         </td>
                         <td className="py-4 px-6">
                           <span className={`inline-flex items-center px-2.5 py-1 rounded-md font-sans text-[10px] font-bold uppercase tracking-wider border ${
@@ -155,8 +160,11 @@ export default function AdminDashboard() {
                             {tx.status}
                           </span>
                         </td>
-                        <td className="py-4 px-6 text-slate-500 max-w-[250px] truncate" title={tx.auditLog?.explanation || "Standard Clearance"}>
-                          {tx.auditLog?.explanation || "Standard Clearance"}
+                        <td className="py-4 px-6 text-slate-500 max-w-[250px] truncate group-hover:text-slate-800 transition-colors">
+                          <span className="flex items-center justify-between">
+                            <span className="truncate">{tx.auditLog?.explanation || "Standard Clearance"}</span>
+                            <ArrowUpRight className="w-4 h-4 opacity-0 group-hover:opacity-100 text-[#F58220] transition-opacity shrink-0 ml-2" />
+                          </span>
                         </td>
                       </tr>
                     );

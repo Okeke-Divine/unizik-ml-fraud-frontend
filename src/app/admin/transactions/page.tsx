@@ -2,9 +2,10 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Search, Filter, RefreshCw, AlertTriangle, CheckCircle2, XCircle, ArrowUpRight } from "lucide-react";
 import AdminHeader from "@/components/AdminHeader";
+import BackButton from "@/components/BackButton";
 
 const FEE_CATEGORIES = [
   { id: "ALL", label: "All Fee Categories" },
@@ -24,8 +25,6 @@ const STATUS_OPTIONS = [
 
 export default function AdminTransactionsPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const pathname = usePathname();
 
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,26 +71,6 @@ export default function AdminTransactionsPage() {
     fetchLedger();
   }, [fetchLedger]);
 
-  // Helper to update URL params
-  const updateParams = useCallback((newParams: Record<string, string | number | null>) => {
-    const params = new URLSearchParams(searchParams.toString());
-    
-    Object.entries(newParams).forEach(([key, value]) => {
-      if (value === null || value === "ALL" || value === "") {
-        params.delete(key);
-      } else {
-        params.set(key, value.toString());
-      }
-    });
-
-    // Reset to page 1 if searching/filtering, unless specifically updating page
-    if (newParams.search !== undefined || newParams.status !== undefined || newParams.category !== undefined) {
-      params.set("page", "1");
-    }
-
-    router.push(`${pathname}?${params.toString()}`);
-  }, [searchParams, pathname, router]);
-
   useEffect(() => {
     // Authorization Check
     const storedUser = localStorage.getItem("unizik_user");
@@ -129,6 +108,10 @@ export default function AdminTransactionsPage() {
       <AdminHeader />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
+
+        {/* Navigation Back Button */}
+        <BackButton />
+
 
         {/* Page Title & Context Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
@@ -271,7 +254,7 @@ export default function AdminTransactionsPage() {
                   </tr>
                 ) : (
                   transactions.map((tx) => {
-                    const isSuccess = tx.status === "SUCCESS" || tx.status === "PAID";
+                    const isSuccess = tx.status === "CLEARED" || tx.status === "PAID";
                     const isBlocked = tx.status === "BLOCKED" || tx.status === "DECLINED";
 
                     return (
@@ -333,18 +316,28 @@ export default function AdminTransactionsPage() {
                         </td>
 
                         <td className="py-4 px-6 text-right whitespace-nowrap">
-                          {isSuccess ? (
+                          <div className="flex items-center justify-end gap-2">
+                            {isSuccess && (
+                              <button
+                                onClick={() => router.push(`/receipt/${tx.id}`)}
+                                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-[#001C3D] font-bold rounded-lg text-[11px] transition-all inline-flex items-center gap-1 cursor-pointer"
+                                title="Inspect Official e-Receipt"
+                              >
+                                <span>Receipt</span>
+                              </button>
+                            )}
                             <button
-                              onClick={() => router.push(`/receipt/${tx.id}`)}
-                              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-[#001C3D] font-bold rounded-lg text-[11px] transition-all inline-flex items-center gap-1 cursor-pointer"
-                              title="Inspect Official e-Receipt"
+                              onClick={() => router.push(`/admin/forensics/${tx.id}`)}
+                              className={`px-3 py-1.5 font-bold rounded-lg text-[11px] transition-all inline-flex items-center gap-1 cursor-pointer shadow-2xs ${isBlocked
+                                  ? "bg-rose-600 hover:bg-rose-700 text-white shadow-rose-500/20"
+                                  : "bg-[#001C3D] hover:bg-[#00152e] text-white"
+                                }`}
+                              title="Inspect White-Box AI Forensics"
                             >
-                              <span>Receipt</span>
+                              <span>Forensics</span>
                               <ArrowUpRight className="w-3 h-3" />
                             </button>
-                          ) : (
-                            <span className="text-[11px] text-slate-400 italic">No Receipt</span>
-                          )}
+                          </div>
                         </td>
                       </tr>
                     );

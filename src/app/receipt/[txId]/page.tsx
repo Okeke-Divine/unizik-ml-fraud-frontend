@@ -5,6 +5,7 @@ import React, { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Printer, CheckCircle2, Building2, QrCode, ShieldCheck, AlertCircle } from "lucide-react";
 import StudentHeader from "@/components/StudentHeader";
+import BackButton from "@/components/BackButton";
 
 export default function ReceiptVerificationPage({ params }: { params: Promise<{ txId: string }> }) {
   const router = useRouter();
@@ -102,13 +103,7 @@ export default function ReceiptVerificationPage({ params }: { params: Promise<{ 
         
         {/* Navigation & Print Control Bar (Hidden on Print) */}
         <div className="flex items-center justify-between mb-6 print:hidden">
-          <button
-            onClick={() => router.push("/dashboard")}
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-[#001C3D] hover:text-[#F58220] transition-colors group cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-            <span>Return to Dashboard</span>
-          </button>
+          <BackButton />
 
           <button
             onClick={handlePrint}

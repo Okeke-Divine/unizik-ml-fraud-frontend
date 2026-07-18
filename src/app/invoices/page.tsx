@@ -5,6 +5,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { FileText, ArrowLeft, Shield, AlertCircle, RefreshCw, Lock, Check } from "lucide-react";
 import StudentHeader from "@/components/StudentHeader";
+import BackButton from "@/components/BackButton";
 
 const FEE_OPTIONS = [
   { id: "TUITION", label: "Tuition & Academic Fee", amount: 85500.00, desc: "Mandatory seasonal tuition for undergraduate degree programs." },
@@ -85,13 +86,7 @@ export default function InvoiceGeneratorPage() {
       <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
         
         {/* Back Navigation */}
-        <button
-          onClick={() => router.push("/dashboard")}
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-[#001C3D] hover:text-[#F58220] mb-6 transition-colors group"
-        >
-          <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-          <span>Return to Dashboard</span>
-        </button>
+        <BackButton />
 
         {/* Main Vercel-Style Form Card */}
         <div className="bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden">

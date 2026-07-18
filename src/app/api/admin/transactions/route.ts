@@ -10,7 +10,7 @@ export async function GET(req: Request) {
     const category = searchParams.get('category');
     const search = searchParams.get('search');
     const page = parseInt(searchParams.get('page') || '1');
-    const limit = 1;
+    const limit = 20;
 
     const whereClause: any = {};
 

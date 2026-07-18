@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { CreditCard, ArrowLeft, AlertCircle, RefreshCw, Lock, Building2, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { generateDeviceFingerprint } from "@/lib/fingerprint";
 import StudentHeader from "@/components/StudentHeader";
+import BackButton from "@/components/BackButton";
 
 export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: string }> }) {
   const router = useRouter();
@@ -119,13 +120,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: 
       <div className="min-h-screen bg-[#F8FAFC] text-slate-800 font-sans pb-16 selection:bg-[#001C3D] selection:text-white">
         <StudentHeader user={user} />
         <main className="max-w-xl mx-auto px-4 sm:px-6 lg:px-8 mt-12">
-          <button
-            onClick={() => router.push("/invoices")}
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-[#001C3D] hover:text-[#F58220] mb-6 transition-colors group cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-            <span>Return to Invoices</span>
-          </button>
+          <BackButton />
           
           <div className="bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] text-center space-y-6">
             <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto shadow-sm">
@@ -182,13 +177,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: 
       <main className="max-w-xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
         
         {/* Navigation */}
-        <button
-          onClick={() => router.push("/invoices")}
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-[#001C3D] hover:text-[#F58220] mb-6 transition-colors group cursor-pointer"
-        >
-          <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-          <span>Return to Invoices</span>
-        </button>
+        <BackButton />
 
         {/* Main Checkout Container */}
         <div className="bg-white border border-slate-200/80 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
