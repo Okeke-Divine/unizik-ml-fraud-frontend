@@ -172,7 +172,7 @@ export default function StudentDashboard() {
                                 <tbody className="divide-y divide-slate-100 text-xs font-medium">
                   {invoices.map((inv) => {
                     const isPaid = inv.status === "PAID";
-                    const isBlocked = inv.status === "BLOCKED";
+                    const isBlocked = inv.status === "BLOCKED" || inv.transactions?.some(tx => tx.status === "BLOCKED");
 
                     return (
                       <tr key={inv.id} className="hover:bg-blue-50/40 transition-colors duration-150">
