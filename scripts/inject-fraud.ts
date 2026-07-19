@@ -1,23 +1,37 @@
 // scripts/inject-fraud.ts
 
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, FeeCategory, InvoiceStatus } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function inject() {
-  // 1. Find Sohail by his updated matric number
-  const student = await prisma.student.findFirst({ where: { matricNumber: '2022514009' } });
-  if (!student) return console.error('❌ Student Sohail not found. Seed the database first.');
+  console.log('🌱 Initiating Standalone Fraud Injection Protocol...');
 
-  // 2. Find his pending fee invoice
-  const invoice = await prisma.feeInvoice.findFirst({ where: { studentId: student.id, status: 'PENDING' } });
-  if (!invoice) return console.error('❌ No pending invoice found for this student.');
-  
-  // 3. Inject the blocked transaction and link it to the white-box fraud audit log
-  await prisma.transaction.create({
+  // 1. Find Sohail by his matric number
+  const student = await prisma.student.findFirst({ where: { matricNumber: '2022514009' } });
+  if (!student) {
+    return console.error('❌ Student Sohail not found. Please run your initial seed script first.');
+  }
+
+  // 2. PATH B ENFORCEMENT: Create a BRAND-NEW standalone invoice specifically for this fraud attempt
+  // This avoids corrupting or appending to his regular pending/paid obligations.
+  const blockedInvoice = await prisma.feeInvoice.create({
     data: {
-      invoiceId: invoice.id,
       studentId: student.id,
-      amount: invoice.amount,
+      category: FeeCategory.ICT_INFRASTRUCTURE, // Distinct category so you can spot it immediately on UI
+      amount: 15000.00,
+      session: '2025/2026',
+      status: InvoiceStatus.BLOCKED, // CRITICAL: Freezes the obligation immediately
+    }
+  });
+
+  console.log(`🔒 Generated standalone frozen obligation: [INVOICE-${blockedInvoice.id.substring(0, 8).toUpperCase()}]`);
+
+  // 3. Inject the blocked transaction and link it to the white-box fraud audit log
+  const tx = await prisma.transaction.create({
+    data: {
+      invoiceId: blockedInvoice.id,
+      studentId: student.id,
+      amount: blockedInvoice.amount,
       reference: `PAY_FRAUD_${Date.now()}`,
       status: 'BLOCKED',
       deviceId: 'UNIZIK_FP_MALICIOUS_BOT_001',
@@ -37,7 +51,12 @@ async function inject() {
       }
     }
   });
+
   console.log('💀 Fraudulent transaction and forensic audit logs injected successfully.');
+  console.log('----------------------------------------------------------------');
+  console.log(`[STUDENT UI]: Invoice will display as "SECURITY HOLD" with "Request Review" button.`);
+  console.log(`[ADMIN UI]: Transaction ${tx.reference} logged in Forensics Drawer.`);
+  console.log('----------------------------------------------------------------');
 }
 
 inject()

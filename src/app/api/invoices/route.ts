@@ -46,7 +46,7 @@ export async function GET(req: Request) {
   }
 }
 
-// POST: Generate a new tamper-proof invoice
+// POST: Generate a new tamper-proof invoice with Zero-Trust state checking
 export async function POST(req: Request) {
   try {
     const { studentId, category, session } = await req.json();
@@ -61,44 +61,49 @@ export async function POST(req: Request) {
 
     const amount = OFFICIAL_FEE_SCHEDULE[category as FeeCategory];
 
-    // Check if this fee has already been paid and cleared for the selected session
-    const existingPaid = await prisma.feeInvoice.findFirst({
+    // CRITICAL FIX: Check if an invoice ALREADY exists in ANY state (PAID, PENDING, or BLOCKED)
+    const existingInvoice = await prisma.feeInvoice.findFirst({
       where: {
         studentId,
         category: category as FeeCategory,
         session,
-        status: InvoiceStatus.PAID,
+        status: {
+          in: [InvoiceStatus.PAID, InvoiceStatus.PENDING, InvoiceStatus.BLOCKED]
+        }
       },
     });
 
-    if (existingPaid) {
-      return NextResponse.json({
-        success: false,
-        error: "This fee category has already been paid and cleared for the selected academic session.",
-        isCleared: true,
-      }, { status: 400 });
+    if (existingInvoice) {
+      // 1. If already PAID: Block new generation
+      if (existingInvoice.status === InvoiceStatus.PAID) {
+        return NextResponse.json({
+          success: false,
+          error: "This fee category has already been paid and cleared for the selected academic session.",
+          isCleared: true,
+        }, { status: 400 });
+      }
+
+      // 2. If under SECURITY HOLD (BLOCKED): Forbid generation! Force them to appeal!
+      if (existingInvoice.status === InvoiceStatus.BLOCKED) {
+        return NextResponse.json({
+          success: false,
+          error: "This fee obligation is currently suspended under a Bursary Security Hold. You must submit an administrative verification appeal before a new transaction can be initiated.",
+          isBlocked: true,
+        }, { status: 403 });
+      }
+
+      // 3. If PENDING: Return the existing pending invoice instead of creating a duplicate
+      if (existingInvoice.status === InvoiceStatus.PENDING) {
+        return NextResponse.json({
+          success: true,
+          message: "Existing pending invoice retrieved.",
+          invoice: existingInvoice,
+          isExisting: true,
+        }, { status: 200 });
+      }
     }
 
-    // Check if an unpaid invoice already exists for this exact fee and session
-    const existingPending = await prisma.feeInvoice.findFirst({
-      where: {
-        studentId,
-        category: category as FeeCategory,
-        session,
-        status: InvoiceStatus.PENDING,
-      },
-    });
-
-    if (existingPending) {
-      return NextResponse.json({
-        success: true,
-        message: "Existing pending invoice retrieved.",
-        invoice: existingPending,
-        isExisting: true,
-      }, { status: 200 });
-    }
-
-    // Create new invoice in SQLite ledger
+    // Create new invoice in SQLite ledger ONLY if no obligation exists for this session
     const newInvoice = await prisma.feeInvoice.create({
       data: {
         studentId,

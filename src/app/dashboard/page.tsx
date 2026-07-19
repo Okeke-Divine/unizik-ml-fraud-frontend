@@ -11,7 +11,7 @@ interface Invoice {
   category: string;
   amount: number;
   session: string;
-  status: "PENDING" | "PAID" | "CANCELLED";
+  status: "PENDING" | "PAID" | "CANCELLED" | "BLOCKED";
   createdAt: string;
   transactions: Array<{ id: string; status: string; reference?: string }>;
 }
@@ -169,9 +169,11 @@ export default function StudentDashboard() {
                     <th className="py-3.5 px-6 text-right">Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-xs font-medium">
+                                <tbody className="divide-y divide-slate-100 text-xs font-medium">
                   {invoices.map((inv) => {
                     const isPaid = inv.status === "PAID";
+                    const isBlocked = inv.status === "BLOCKED";
+
                     return (
                       <tr key={inv.id} className="hover:bg-blue-50/40 transition-colors duration-150">
                         <td className="py-4 px-6 font-bold text-[#001C3D] text-sm">
@@ -187,6 +189,12 @@ export default function StudentDashboard() {
                               <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
                               <span>PAID &amp; CLEARED</span>
                             </span>
+                          ) : isBlocked ? (
+                            /* Institutional Wording: No robotic terms */
+                            <span className="inline-flex items-center gap-1.5 bg-rose-50 text-rose-800 border border-rose-200 px-3 py-1 rounded-full font-sans text-[11px] font-bold shadow-2xs">
+                              <Shield className="w-3.5 h-3.5 text-rose-600" />
+                              <span>SECURITY HOLD</span>
+                            </span>
                           ) : (
                             <span className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-800 border border-amber-200/80 px-3 py-1 rounded-full font-sans text-[11px] font-bold shadow-2xs">
                               <Clock className="w-3.5 h-3.5 text-amber-600" />
@@ -198,14 +206,23 @@ export default function StudentDashboard() {
                           {isPaid ? (
                             <button
                               onClick={() => {
-                                // Fallback to invoice ID if specific transaction ID isn't mapped
-                                const txId = inv.transactions?.[0]?.id || (inv as any).reference || inv.id;
+                                const clearedTx = inv.transactions?.find(tx => tx.status === "CLEARED" || tx.status === "SUCCESS");
+                                const txId = clearedTx?.id || (inv as any).reference || inv.id;
                                 router.push(`/receipt/${txId}`);
                               }}
                               className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white rounded-xl font-bold text-xs transition-all duration-200 shadow-2xs flex items-center gap-1.5 ml-auto cursor-pointer"
                             >
                               <FileText className="w-3.5 h-3.5" />
                               <span>View Receipt</span>
+                            </button>
+                          ) : isBlocked ? (
+                            /* Hides Pay Now button. Replaced with administrative appeal routing */
+                            <button
+                              onClick={() => router.push(`/support/appeal?invoiceId=${inv.id}`)}
+                              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white rounded-xl font-bold text-xs transition-all duration-200 shadow-sm shadow-rose-500/20 flex items-center gap-1.5 ml-auto cursor-pointer"
+                            >
+                              <AlertCircle className="w-3.5 h-3.5" />
+                              <span>Request Review</span>
                             </button>
                           ) : (
                             <button

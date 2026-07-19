@@ -11,7 +11,7 @@ import BackButton from "@/components/BackButton";
 export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: string }> }) {
   const router = useRouter();
   const { invoiceId } = use(params);
-  
+
   const [user, setUser] = useState<any | null>(null);
   const [invoice, setInvoice] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -19,7 +19,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: 
   const [deviceId, setDeviceId] = useState("");
   const [mismatch, setMismatch] = useState(0);
   const [paymentError, setPaymentError] = useState<string | null>(null);
-  
+
   // High-precision timer for behavioral dwell-time telemetry
   const startTime = useRef(performance.now());
 
@@ -49,7 +49,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: 
     const initTelemetry = async () => {
       const currentFP = await generateDeviceFingerprint();
       setDeviceId(currentFP);
-      
+
       if (storedUser) {
         const parsedUser = JSON.parse(storedUser);
         if (parsedUser.loginDeviceId && parsedUser.loginDeviceId !== currentFP) {
@@ -64,13 +64,13 @@ export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: 
 
   const handlePay = async () => {
     if (!user || !invoice) return;
-    
+
     setProcessing(true);
     setPaymentError(null);
 
     // Calculate real user dwell time in seconds
     const dwellTime = (performance.now() - startTime.current) / 1000;
-    
+
     const payload = {
       studentId: user.id,
       invoiceId: invoiceId,
@@ -91,8 +91,12 @@ export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: 
       const data = await res.json();
 
       if (res.ok && data.success) {
-        const txId = data.data.id; 
+        const txId = data.data.id;
         router.push(`/receipt/${txId}`);
+      } else if (res.status === 403 || data.message === "Blocked" || data.verdict === "FRAUDULENT") {
+        // INSTANT STATE LOCKOUT: Forces React into the BLOCKED view immediately.
+        // This removes the "Complete Payment" button from the DOM so they cannot spam the DB!
+        setInvoice((prev: any) => ({ ...prev, status: "BLOCKED" }));
       } else {
         setPaymentError(data.error || data.message || "Transaction declined by payment review. Please visit the Bursary desk.");
       }
@@ -121,12 +125,12 @@ export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: 
         <StudentHeader user={user} />
         <main className="max-w-xl mx-auto px-4 sm:px-6 lg:px-8 mt-12">
           <BackButton />
-          
+
           <div className="bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] text-center space-y-6">
             <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto shadow-sm">
               <CheckCircle2 className="w-8 h-8 stroke-[2.5]" />
             </div>
-            
+
             <div className="space-y-1">
               <span className="text-[10px] font-bold uppercase tracking-widest text-[#F58220] block">
                 Nnamdi Azikiwe University Bursary
@@ -138,7 +142,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: 
                 This fee invoice has already been processed and verified in the university records.
               </p>
             </div>
-            
+
             <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 text-left space-y-2 text-xs">
               <div className="flex justify-between">
                 <span className="text-slate-500 font-medium">Fee Category:</span>
@@ -168,20 +172,57 @@ export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: 
     );
   }
 
+
+  // 4. ZERO-TRUST PRE-FLIGHT LOCKOUT: Block form rendering if invoice is frozen
+  if (invoice.status === "BLOCKED") {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] text-slate-800 font-sans pb-16 selection:bg-[#001C3D] selection:text-white">
+        <StudentHeader user={user} />
+        <main className="max-w-xl mx-auto px-4 sm:px-6 lg:px-8 mt-12">
+          <BackButton />
+          <div className="bg-white border border-rose-200 rounded-2xl p-6 sm:p-8 shadow-sm text-center space-y-5">
+            <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center mx-auto border border-rose-200">
+              <AlertTriangle className="w-8 h-8 stroke-[2]" />
+            </div>
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-rose-700 block">
+                Security Verification Required
+              </span>
+              <h1 className="text-xl font-extrabold text-[#001C3D]">
+                Payment Attempt Blocked
+              </h1>
+              <p className="text-xs text-slate-600 leading-relaxed max-w-md mx-auto">
+                Our security system paused this payment because it detected unusual activity from your device or internet connection. This is a safety measure to protect student accounts from unauthorized access or cybercafe fraud.
+              </p>
+            </div>
+            <div className="pt-2">
+              <button
+                onClick={() => router.push(`/support/appeal?invoiceId=${invoiceId}`)}
+                className="w-full py-3.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer flex items-center justify-center gap-2"
+              >
+                <span>Request Review from Bursary</span>
+              </button>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-800 font-sans pb-16 selection:bg-[#001C3D] selection:text-white">
-      
+
       {/* Reusable Institutional Header */}
       <StudentHeader user={user} />
 
       <main className="max-w-xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
-        
+
         {/* Navigation */}
         <BackButton />
 
         {/* Main Checkout Container */}
         <div className="bg-white border border-slate-200/80 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
-          
+
           {/* Top Institutional Banner */}
           <div className="bg-[#001C3D] p-6 text-white flex items-center justify-between">
             <div>
@@ -198,7 +239,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: 
           </div>
 
           <div className="p-6 sm:p-8 space-y-6">
-            
+
             {/* Device Variance Administrative Notice */}
             {/* {mismatch === 1 && (
               <div className="p-4 bg-amber-50 border border-amber-200/80 rounded-xl text-xs text-amber-900 flex items-start gap-3 shadow-2xs">
@@ -238,7 +279,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: 
                   {invoice.category.replace("_", " ")}
                 </span>
               </div>
-              
+
               <div className="p-4 flex justify-between items-center">
                 <span className="text-slate-500 font-medium">Academic Session</span>
                 <span className="font-semibold text-slate-700 font-mono">
