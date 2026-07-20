@@ -197,14 +197,14 @@ export default function LoginPage() {
         </div>
 
         {/* Undergraduate Registration Redirect */}
-        {/* {!isAdmin && (
+        {!isAdmin && (
           <p className="mt-6 text-center text-xs text-slate-600 font-medium">
             Don&apos;t have a student profile yet?{" "}
             <a href="/register" className="text-[#001C3D] hover:text-[#F58220] font-bold hover:underline transition-colors">
-              Register New Undergraduate Profile
+              Create One
             </a>
           </p>
-        )} */}
+        )}
       </div>
 
     </div>

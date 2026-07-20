@@ -151,7 +151,7 @@ export default function AdminAppealsPage() {
           </div>
 
           {/* Search Bar */}
-          <div className="relative min-w-[280px] sm:min-w-[320px]">
+          {/* <div className="relative min-w-[280px] sm:min-w-[320px]">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
@@ -168,7 +168,7 @@ export default function AdminAppealsPage() {
                 Clear
               </button>
             )}
-          </div>
+          </div> */}
         </div>
 
         {/* High-Density Data Grid */}

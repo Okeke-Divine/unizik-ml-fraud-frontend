@@ -1,43 +1,73 @@
 // unizik-ml-fraud-frontend/src/app/api/auth/register/route.ts
-
 import { NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
+import bcrypt from 'bcryptjs'; // CRITICAL FIX: Use bcryptjs to match your login and seed scripts!
 
 export async function POST(req: Request) {
   try {
-    const { matricNumber, email, password, firstName, lastName, department, level, deviceId } = await req.json();
+    const body = await req.json();
+    const { matricNumber, email, password, firstName, lastName, department, level, deviceId } = body;
 
+    // 1. Strict Institutional Validation
     if (!matricNumber || !email || !password || !firstName || !lastName || !department || !level) {
-      return NextResponse.json({ success: false, error: "All student registration fields are mandatory." }, { status: 400 });
+      return NextResponse.json({ 
+        success: false, 
+        error: "All academic profile fields are strictly required for onboarding." 
+      }, { status: 400 });
     }
 
-    const existing = await prisma.student.findFirst({
-      where: { OR: [{ matricNumber }, { email }] },
+    // 2. Format Enforcement
+    const cleanMatric = matricNumber.trim().toUpperCase();
+    const cleanEmail = email.trim().toLowerCase();
+
+    // 3. Duplicate Account Prevention
+    const existingStudent = await prisma.student.findFirst({
+      where: {
+        OR: [
+          { matricNumber: cleanMatric },
+          { email: cleanEmail }
+        ]
+      }
     });
 
-    if (existing) {
-      return NextResponse.json({ success: false, error: "Matriculation Number or Email already registered in UNIZIK database." }, { status: 409 });
+    if (existingStudent) {
+      const field = existingStudent.matricNumber === cleanMatric ? "Matriculation Number" : "Email Address";
+      return NextResponse.json({ 
+        success: false, 
+        error: `A student profile with this ${field} is already registered in the central database.` 
+      }, { status: 409 });
     }
 
+    // 4. Create Student Profile & Hash Password with BCRYPT (10 salt rounds)
     const hashedPassword = bcrypt.hashSync(password, 10);
 
     const newStudent = await prisma.student.create({
       data: {
-        matricNumber,
-        email,
-        password: hashedPassword,
-        firstName,
-        lastName,
-        department,
+        matricNumber: cleanMatric,
+        email: cleanEmail,
+        password: hashedPassword, // Perfectly encrypted for login compatibility!
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        department: department.trim(),
         level: Number(level),
-        loginDeviceId: deviceId || "UNIZIK_FP_REGISTRATION_BASELINE",
-      },
+        loginDeviceId: deviceId || "UNKNOWN_BASELINE"
+      }
     });
 
-    return NextResponse.json({ success: true, message: "Student account created successfully.", studentId: newStudent.id }, { status: 201 });
+    // 5. Return sanitized profile (excluding password hash)
+    const { password: _, ...sanitizedStudent } = newStudent;
+
+    return NextResponse.json({ 
+      success: true, 
+      message: "Undergraduate profile registered successfully.",
+      user: sanitizedStudent 
+    }, { status: 201 });
+
   } catch (error: any) {
-    console.error("[REGISTRATION ERROR]:", error.message);
-    return NextResponse.json({ success: false, error: "Database creation failure." }, { status: 500 });
+    console.error("[STUDENT REGISTRATION ERROR]:", error.message);
+    return NextResponse.json({ 
+      success: false, 
+      error: "An internal database error occurred while creating your student profile." 
+    }, { status: 500 });
   }
 }
