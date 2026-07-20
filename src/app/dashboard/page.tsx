@@ -172,7 +172,12 @@ export default function StudentDashboard() {
                                 <tbody className="divide-y divide-slate-100 text-xs font-medium">
                   {invoices.map((inv) => {
                     const isPaid = inv.status === "PAID";
-                    const isBlocked = inv.status === "BLOCKED" || inv.transactions?.some(tx => tx.status === "BLOCKED");
+                    // SINGLE SOURCE OF TRUTH: Evaluate only the cryptographic head (newest attempt)
+                    const latestTx = inv.transactions?.[0];
+                    const appealStatus = latestTx?.appeal?.status; // "PENDING" | "REJECTED" | "APPROVED" | undefined
+                    
+                    // Shield: Remains actively blocked unless the Bursar explicitly grants an APPROVED override
+                    const isActivelyBlocked = (inv.status === "BLOCKED" || latestTx?.status === "BLOCKED") && appealStatus !== "APPROVED";
 
                     return (
                       <tr key={inv.id} className="hover:bg-blue-50/40 transition-colors duration-150">
@@ -189,13 +194,28 @@ export default function StudentDashboard() {
                               <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
                               <span>PAID &amp; CLEARED</span>
                             </span>
-                          ) : isBlocked ? (
-                            /* Institutional Wording: No robotic terms */
-                            <span className="inline-flex items-center gap-1.5 bg-rose-50 text-rose-800 border border-rose-200 px-3 py-1 rounded-full font-sans text-[11px] font-bold shadow-2xs">
-                              <Shield className="w-3.5 h-3.5 text-rose-600" />
-                              <span>SECURITY HOLD</span>
-                            </span>
+                          ) : isActivelyBlocked ? (
+                            appealStatus === "PENDING" ? (
+                              /* STATE 1: APPEAL PENDING IN BURSAR'S QUEUE */
+                              <span className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-800 border border-blue-200 px-3 py-1 rounded-full font-sans text-[11px] font-bold shadow-2xs">
+                                <Clock className="w-3.5 h-3.5 text-blue-600 animate-pulse" />
+                                <span>REVIEW PENDING</span>
+                              </span>
+                            ) : appealStatus === "REJECTED" ? (
+                              /* STATE 2: APPEAL REJECTED BY BURSAR */
+                              <span className="inline-flex items-center gap-1.5 bg-rose-50 text-rose-900 border border-rose-300 px-3 py-1 rounded-full font-sans text-[11px] font-bold shadow-2xs">
+                                <Shield className="w-3.5 h-3.5 text-rose-700" />
+                                <span>REVIEW CONCLUDED: NOT APPROVED</span>
+                              </span>
+                            ) : (
+                              /* STATE 3: BLOCKED WITH NO APPEAL SUBMITTED YET */
+                              <span className="inline-flex items-center gap-1.5 bg-rose-50 text-rose-800 border border-rose-200 px-3 py-1 rounded-full font-sans text-[11px] font-bold shadow-2xs">
+                                <Shield className="w-3.5 h-3.5 text-rose-600" />
+                                <span>SECURITY HOLD</span>
+                              </span>
+                            )
                           ) : (
+                            /* STATE 4: NORMAL PENDING CLEARANCE (OR APPROVED OVERRIDE BACK TO PENDING) */
                             <span className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-800 border border-amber-200/80 px-3 py-1 rounded-full font-sans text-[11px] font-bold shadow-2xs">
                               <Clock className="w-3.5 h-3.5 text-amber-600" />
                               <span>PENDING CLEARANCE</span>
@@ -206,7 +226,7 @@ export default function StudentDashboard() {
                           {isPaid ? (
                             <button
                               onClick={() => {
-                                const clearedTx = inv.transactions?.find(tx => tx.status === "CLEARED" || tx.status === "SUCCESS");
+                                const clearedTx = inv.transactions?.find((tx: any) => tx.status === "CLEARED" || tx.status === "SUCCESS");
                                 const txId = clearedTx?.id || (inv as any).reference || inv.id;
                                 router.push(`/receipt/${txId}`);
                               }}
@@ -215,16 +235,37 @@ export default function StudentDashboard() {
                               <FileText className="w-3.5 h-3.5" />
                               <span>View Receipt</span>
                             </button>
-                          ) : isBlocked ? (
-                            /* Hides Pay Now button. Replaced with administrative appeal routing */
-                            <button
-                              onClick={() => router.push(`/support/appeal?invoiceId=${inv.id}`)}
-                              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white rounded-xl font-bold text-xs transition-all duration-200 shadow-sm shadow-rose-500/20 flex items-center gap-1.5 ml-auto cursor-pointer"
-                            >
-                              <AlertCircle className="w-3.5 h-3.5" />
-                              <span>Request Review</span>
-                            </button>
+                          ) : isActivelyBlocked ? (
+                            appealStatus === "PENDING" ? (
+                              /* Disabled state while waiting for Admin to review */
+                              <button
+                                disabled
+                                className="px-4 py-2 bg-slate-100 text-slate-400 border border-slate-200 rounded-xl font-bold text-xs flex items-center gap-1.5 ml-auto cursor-not-allowed"
+                              >
+                                <Clock className="w-3.5 h-3.5" />
+                                <span>Under Review</span>
+                              </button>
+                            ) : appealStatus === "REJECTED" ? (
+                              /* Lets student try submitting a better explanation if rejected */
+                              <button
+                                onClick={() => router.push(`/support/appeal?invoiceId=${inv.id}`)}
+                                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white rounded-xl font-bold text-xs transition-all duration-200 shadow-sm shadow-rose-500/20 flex items-center gap-1.5 ml-auto cursor-pointer"
+                              >
+                                <AlertCircle className="w-3.5 h-3.5" />
+                                <span>Request Review</span>
+                              </button>
+                            ) : (
+                              /* Initial button to submit an appeal */
+                              <button
+                                onClick={() => router.push(`/support/appeal?invoiceId=${inv.id}`)}
+                                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white rounded-xl font-bold text-xs transition-all duration-200 shadow-sm shadow-rose-500/20 flex items-center gap-1.5 ml-auto cursor-pointer"
+                              >
+                                <AlertCircle className="w-3.5 h-3.5" />
+                                <span>Request Review</span>
+                              </button>
+                            )
                           ) : (
+                            /* Standard Pay Now button (shows up initially or after an Admin APPROVES an appeal) */
                             <button
                               onClick={() => router.push(`/checkout/${inv.id}`)}
                               className="px-4 py-2 bg-[#F58220] hover:bg-[#d97016] active:scale-[0.98] text-white rounded-xl font-bold text-xs transition-all duration-200 shadow-sm shadow-orange-500/20 flex items-center gap-1.5 ml-auto cursor-pointer"

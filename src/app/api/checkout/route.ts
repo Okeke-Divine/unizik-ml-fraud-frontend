@@ -81,13 +81,13 @@ export async function POST(req: Request) {
     }
 
     // 2. DISPATCH TO ML ENGINE
-    // const engineResult = await evaluatePaymentTransaction(payload);
+    const engineResult = await evaluatePaymentTransaction(payload);
 
-    const engineResult = {
-      verdict: 'FRAUDULENT',
-      confidence: 0.995,
-      explanation: 'Automated Fraud Engine: Detected device hardware fingerprint mismatch alongside anomalous low-dwell page telemetry from an unverified ASN route.'
-    };
+    // const engineResult = {
+    //   verdict: 'FRAUDULENT',
+    //   confidence: 0.995,
+    //   explanation: 'Automated Fraud Engine: Detected device hardware fingerprint mismatch alongside anomalous low-dwell page telemetry from an unverified ASN route.'
+    // };
 
     // Use upsert to prevent "Unique constraint failed" on reference collisions
     // and fix the status enum to match your schema ('CLEARED' vs 'SUCCESS')

@@ -35,6 +35,9 @@ export async function GET(req: Request) {
         transactions: {
           orderBy: { createdAt: 'desc' },
           take: 1, // Include the most recent transaction attempt for status indicator
+          include: {
+            appeal: true,
+          },
         }
       }
     });
