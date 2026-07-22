@@ -6,55 +6,59 @@ import { prisma } from '@/lib/prisma';
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const status = searchParams.get('status');
-    const category = searchParams.get('category');
-    const search = searchParams.get('search');
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = 20;
+    const search = searchParams.get('search') || '';
+    const status = searchParams.get('status') || 'ALL';
 
     const whereClause: any = {};
 
-    if (status && status !== 'ALL') {
-      // Ensure we map the frontend dropdown strings to the exact DB Enums
-      if (status === 'CLEARED') {
-        whereClause.status = 'CLEARED';
-      } else if (status === 'BLOCKED') {
-        whereClause.status = 'BLOCKED';
-      } else if (status === 'PENDING') {
-        whereClause.status = 'PENDING';
-      } else if (status === 'FAILED') {
-        whereClause.status = 'FAILED';
-      }
+    // Filter by transaction clearance status if selected
+    if (status !== 'ALL') {
+      whereClause.status = status;
     }
 
-    if (category && category !== 'ALL') {
-      whereClause.invoice = { category: category as any };
-    }
-
+    // Multi-word tokenized search (Supports "fname lname", "lname fname", or matric number)
     if (search && search.trim() !== '') {
-      whereClause.OR = [
-        { reference: { contains: search } },
-        { student: { matricNumber: { contains: search } } },
-      ];
+      const searchWords = search.trim().toLowerCase().split(/\s+/);
+
+      whereClause.AND = searchWords.map((word) => ({
+        OR: [
+          { reference: { contains: word } },
+          { student: { matricNumber: { contains: word } } },
+          { student: { firstName: { contains: word } } },
+          { student: { lastName: { contains: word } } },
+          { invoice: { category: { contains: word } } },
+        ],
+      }));
     }
 
-    const [transactions, total] = await Promise.all([
-      prisma.transaction.findMany({
-        where: whereClause,
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-        skip: (page - 1) * limit,
-        include: {
-          student: { select: { matricNumber: true, firstName: true, lastName: true } },
-          invoice: { select: { category: true } },
-          auditLog: true,
+    const transactions = await prisma.transaction.findMany({
+      where: whereClause,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        student: {
+          select: {
+            matricNumber: true,
+            firstName: true,
+            lastName: true,
+            department: true,
+            level: true,
+          },
         },
-      }),
-      prisma.transaction.count({ where: whereClause })
-    ]);
+        invoice: {
+          select: {
+            category: true,
+            session: true,
+            amount: true,
+          },
+        },
+        auditLog: true,
+        appeal: true,
+      },
+    });
 
-    return NextResponse.json({ success: true, transactions, total, pages: Math.ceil(total / limit) }, { status: 200 });
+    return NextResponse.json({ success: true, transactions }, { status: 200 });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.error('[ADMIN TRANSACTIONS ERROR]:', error.message);
+    return NextResponse.json({ success: false, error: 'Failed to retrieve global transaction ledger.' }, { status: 500 });
   }
 }

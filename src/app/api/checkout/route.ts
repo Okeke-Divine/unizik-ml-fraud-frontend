@@ -16,6 +16,7 @@ const checkoutSchema = z.object({
   deviceId: z.string().min(8),
   pageDwellTime: z.number().positive(),
   hardwareMismatch: z.number().int().min(0).max(1),
+  simMode: z.enum(["NORMAL", "BOT", "SPOOF"]).optional().default("NORMAL"),
 });
 
 /**
@@ -24,35 +25,30 @@ const checkoutSchema = z.object({
  * If not, flags as high risk (asnNumber = 1).
  */
 async function getNetworkRiskScore(ip: string): Promise<number> {
-  // 1. Localhost Handling
-  if (ip === "127.0.0.1" || ip === "::1" || ip.startsWith("192.168.")) return 0; // Safe in dev
+  if (ip === "127.0.0.1" || ip === "::1" || ip.startsWith("192.168.")) return 0;
 
   try {
-    // Using free, no-key API: ip-api.com
     const response = await fetch(`http://ip-api.com/json/${ip}?fields=status,isp,query`);
     const data = await response.json();
 
-    if (data.status !== "success") return 1; // Flag as risk if we can't resolve IP
+    if (data.status !== "success") return 1;
 
     const ispName = data.isp.toUpperCase();
     const telcos = ["MTN", "GLOBACOM", "AIRTEL", "9MOBILE", "ETISALAT"];
-
-    // Check if the ISP string includes any of our whitelisted Nigerian Telcos
     const isLocalTelco = telcos.some(telco => ispName.includes(telco));
 
-    return isLocalTelco ? 0 : 1; // 0 = Safe (Local), 1 = Risky (VPN/Foreign/Other)
+    return isLocalTelco ? 0 : 1;
   } catch (e) {
     console.error("[NETWORK DETECTION ERROR]", e);
-    return 1; // Default to risky if detection fails
+    return 1;
   }
 }
 
 export async function POST(req: Request) {
   try {
     const headersList = await headers();
-    // Get real IP from headers
     const rawIp = headersList.get('x-forwarded-for') || '127.0.0.1';
-    const ipAddress = rawIp.split(',')[0]; // Handle proxy chains
+    const ipAddress = rawIp.split(',')[0];
 
     const body = await req.json();
     const validation = checkoutSchema.safeParse(body);
@@ -61,14 +57,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: "Validation Failed", details: validation.error }, { status: 400 });
     }
 
-    // Server-side network risk assessment
     const asnNumber = await getNetworkRiskScore(ipAddress);
 
-    // Merge client telemetry with server-derived network metadata
     const payload = {
       ...validation.data,
       ipAddress,
-      asnNumber, // ENFORCED: Server overrides client's asnNumber
+      asnNumber,
     };
 
     // 1. FINANCIAL INTEGRITY GUARDRAIL
@@ -83,14 +77,6 @@ export async function POST(req: Request) {
     // 2. DISPATCH TO ML ENGINE
     const engineResult = await evaluatePaymentTransaction(payload);
 
-    // const engineResult = {
-    //   verdict: 'FRAUDULENT',
-    //   confidence: 0.995,
-    //   explanation: 'Automated Fraud Engine: Detected device hardware fingerprint mismatch alongside anomalous low-dwell page telemetry from an unverified ASN route.'
-    // };
-
-    // Use upsert to prevent "Unique constraint failed" on reference collisions
-    // and fix the status enum to match your schema ('CLEARED' vs 'SUCCESS')
     const tx = await prisma.transaction.upsert({
       where: { reference: payload.reference },
       update: {},
@@ -109,7 +95,6 @@ export async function POST(req: Request) {
     });
 
     if (engineResult.verdict === 'FRAUDULENT') {
-      // CRITICAL PATH B ENFORCEMENT: Freeze the parent invoice immediately
       await prisma.feeInvoice.update({
         where: { id: payload.invoiceId },
         data: { status: 'BLOCKED' as any }

@@ -3,10 +3,11 @@
 
 import React, { useState, useEffect, useRef, use } from "react";
 import { useRouter } from "next/navigation";
-import { CreditCard, ArrowLeft, AlertCircle, RefreshCw, Lock, Building2, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { CreditCard, AlertCircle, RefreshCw, Lock, Building2, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { generateDeviceFingerprint } from "@/lib/fingerprint";
 import StudentHeader from "@/components/StudentHeader";
 import BackButton from "@/components/BackButton";
+import DefenseTelemetrySwitch, { SimulationMode } from "@/components/DefenseTelemetrySwitch";
 
 export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: string }> }) {
   const router = useRouter();
@@ -19,6 +20,9 @@ export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: 
   const [deviceId, setDeviceId] = useState("");
   const [mismatch, setMismatch] = useState(0);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  
+  // Clean component state for your live defense presentation
+  const [simMode, setSimMode] = useState<SimulationMode>("NORMAL");
 
   // High-precision timer for behavioral dwell-time telemetry
   const startTime = useRef(performance.now());
@@ -68,17 +72,27 @@ export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: 
     setProcessing(true);
     setPaymentError(null);
 
-    // Calculate real user dwell time in seconds
-    const dwellTime = (performance.now() - startTime.current) / 1000;
+    // DETERMINISTIC TELEMETRY INJECTION: Maps your component toggle directly into the API payload
+    const realDwellTime = (performance.now() - startTime.current) / 1000;
+    const targetDwellTime = simMode === "BOT" ? 0.12 : realDwellTime;
+    
+    const targetDeviceId = simMode === "BOT" 
+      ? "UNIZIK_FP_MALICIOUS_BOT_001" 
+      : simMode === "SPOOF" 
+      ? "UNIZIK_FP_PROXY_CLUSTER_999" 
+      : deviceId;
+      
+    const targetMismatch = simMode === "SPOOF" ? 1 : mismatch;
 
     const payload = {
       studentId: user.id,
       invoiceId: invoiceId,
       amount: invoice.amount || 0,
       reference: `PAY_${Date.now().toString(36).toUpperCase()}_${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
-      deviceId: deviceId,
-      pageDwellTime: dwellTime,
-      hardwareMismatch: mismatch,
+      deviceId: targetDeviceId,
+      pageDwellTime: targetDwellTime,
+      hardwareMismatch: targetMismatch,
+      simMode: simMode,
     };
 
     try {
@@ -94,11 +108,9 @@ export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: 
         const txId = data.data.id;
         router.push(`/receipt/${txId}`);
       } else if (res.status === 403 || data.message === "Blocked" || data.verdict === "FRAUDULENT") {
-        // INSTANT STATE LOCKOUT: Forces React into the BLOCKED view immediately.
-        // This removes the "Complete Payment" button from the DOM so they cannot spam the DB!
         setInvoice((prev: any) => ({ ...prev, status: "BLOCKED" }));
       } else {
-        setPaymentError(data.error || data.message || "Transaction declined by payment review. Please visit the Bursary desk.");
+        setPaymentError(data.error || data.message || "Transaction declined by payment review.");
       }
     } catch (err) {
       setPaymentError("A network error occurred while processing your transaction.");
@@ -118,31 +130,25 @@ export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: 
     );
   }
 
-  // 3. CLEARED PAYMENT RECEIPT COVER (Instant UI Lockout if invoice is already paid)
   if (invoice.status === "PAID") {
     return (
       <div className="min-h-screen bg-[#F8FAFC] text-slate-800 font-sans pb-16 selection:bg-[#001C3D] selection:text-white">
         <StudentHeader user={user} />
         <main className="max-w-xl mx-auto px-4 sm:px-6 lg:px-8 mt-12">
           <BackButton />
-
           <div className="bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] text-center space-y-6">
             <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto shadow-sm">
               <CheckCircle2 className="w-8 h-8 stroke-[2.5]" />
             </div>
-
             <div className="space-y-1">
               <span className="text-[10px] font-bold uppercase tracking-widest text-[#F58220] block">
                 Nnamdi Azikiwe University Bursary
               </span>
-              <h1 className="text-xl font-extrabold text-[#001C3D]">
-                Payment Cleared
-              </h1>
+              <h1 className="text-xl font-extrabold text-[#001C3D]">Payment Cleared</h1>
               <p className="text-xs text-slate-500 font-medium">
                 This fee invoice has already been processed and verified in the university records.
               </p>
             </div>
-
             <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 text-left space-y-2 text-xs">
               <div className="flex justify-between">
                 <span className="text-slate-500 font-medium">Fee Category:</span>
@@ -159,7 +165,6 @@ export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: 
                 </span>
               </div>
             </div>
-
             <button
               onClick={() => router.push("/dashboard")}
               className="w-full py-3.5 bg-[#001C3D] hover:bg-[#00152e] text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
@@ -172,8 +177,6 @@ export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: 
     );
   }
 
-
-  // 4. ZERO-TRUST PRE-FLIGHT LOCKOUT: Block form rendering if invoice is frozen
   if (invoice.status === "BLOCKED") {
     return (
       <div className="min-h-screen bg-[#F8FAFC] text-slate-800 font-sans pb-16 selection:bg-[#001C3D] selection:text-white">
@@ -188,9 +191,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: 
               <span className="text-[10px] font-bold uppercase tracking-widest text-rose-700 block">
                 Security Verification Required
               </span>
-              <h1 className="text-xl font-extrabold text-[#001C3D]">
-                Payment Attempt Blocked
-              </h1>
+              <h1 className="text-xl font-extrabold text-[#001C3D]">Payment Attempt Blocked</h1>
               <p className="text-xs text-slate-600 leading-relaxed max-w-md mx-auto">
                 Our security system paused this payment because it detected unusual activity from your device or internet connection. This is a safety measure to protect student accounts from unauthorized access or cybercafe fraud.
               </p>
@@ -211,27 +212,18 @@ export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: 
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-800 font-sans pb-16 selection:bg-[#001C3D] selection:text-white">
-
-      {/* Reusable Institutional Header */}
       <StudentHeader user={user} />
-
+      
       <main className="max-w-xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
-
-        {/* Navigation */}
         <BackButton />
 
-        {/* Main Checkout Container */}
         <div className="bg-white border border-slate-200/80 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
-
-          {/* Top Institutional Banner */}
           <div className="bg-[#001C3D] p-6 text-white flex items-center justify-between">
             <div>
               <span className="text-[10px] font-bold uppercase tracking-widest text-[#F58220] block mb-0.5">
                 Central Bursary Gateway
               </span>
-              <h1 className="text-lg font-extrabold tracking-tight">
-                Payment Authorization
-              </h1>
+              <h1 className="text-lg font-extrabold tracking-tight">Payment Authorization</h1>
             </div>
             <div className="p-2.5 bg-white/10 rounded-xl border border-white/15">
               <Building2 className="w-6 h-6 text-[#F58220]" />
@@ -239,62 +231,29 @@ export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: 
           </div>
 
           <div className="p-6 sm:p-8 space-y-6">
-
-            {/* Device Variance Administrative Notice */}
-            {/* {mismatch === 1 && (
-              <div className="p-4 bg-amber-50 border border-amber-200/80 rounded-xl text-xs text-amber-900 flex items-start gap-3 shadow-2xs">
-                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <span className="font-bold block text-amber-950">Session Variance Notice</span>
-                  <p className="leading-relaxed text-slate-600">
-                    You are accessing the payment gateway from a different device or browser than your initial login. This transaction will undergo standardized automated verification.
-                  </p>
-                </div>
-              </div>
-            )} */}
-
-            {/* Student Account Identification */}
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 flex items-center justify-between text-xs">
               <div>
                 <span className="text-slate-400 font-bold uppercase tracking-wider block text-[10px] mb-0.5">
                   Payer Identification
                 </span>
-                <span className="font-extrabold text-[#001C3D] text-sm">
-                  {user?.name}
-                </span>
-                <span className="text-slate-500 font-mono ml-1.5 font-semibold">
-                  ({user?.matricNumber})
-                </span>
+                <span className="font-extrabold text-[#001C3D] text-sm">{user?.name}</span>
+                <span className="text-slate-500 font-mono ml-1.5 font-semibold">({user?.matricNumber})</span>
               </div>
               <div className="text-right font-mono text-[11px] font-bold text-slate-500 bg-white px-2.5 py-1 rounded border border-slate-200">
                 {user?.department}
               </div>
             </div>
 
-            {/* Structured Invoice Summary */}
             <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 overflow-hidden text-sm">
               <div className="p-4 bg-slate-50/50 flex justify-between items-center">
                 <span className="text-slate-500 font-medium">Fee Category</span>
-                <span className="font-bold text-[#001C3D]">
-                  {invoice.category.replace("_", " ")}
-                </span>
+                <span className="font-bold text-[#001C3D]">{invoice.category.replace("_", " ")}</span>
               </div>
-
               <div className="p-4 flex justify-between items-center">
                 <span className="text-slate-500 font-medium">Academic Session</span>
-                <span className="font-semibold text-slate-700 font-mono">
-                  {invoice.session}
-                </span>
+                <span className="font-semibold text-slate-700 font-mono">{invoice.session}</span>
               </div>
-
-              <div className="p-4 flex justify-between items-center">
-                <span className="text-slate-500 font-medium">Payment Reference</span>
-                <span className="font-mono text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
-                  AUTO-GENERATED ON SUBMIT
-                </span>
-              </div>
-
-              <div className="p-4 bg-blue-50/40 flex justify-between items-center">
+              <div className="p-4 bg-blue-50/40 flex justify-between items-center border-t border-slate-100">
                 <span className="font-bold text-slate-700">Total Amount Due</span>
                 <span className="text-lg font-extrabold text-[#001C3D] font-mono">
                   ₦{invoice.amount.toLocaleString("en-NG", { minimumFractionDigits: 2 })}
@@ -302,7 +261,12 @@ export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: 
               </div>
             </div>
 
-            {/* Simulated Payment Gateway Integration */}
+            <DefenseTelemetrySwitch 
+              simMode={simMode} 
+              onModeChange={setSimMode} 
+              disabled={processing} 
+            />
+
             <div className="space-y-2">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
                 Payment Processing Channel
@@ -327,7 +291,6 @@ export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: 
               </div>
             </div>
 
-            {/* Error Notification Banner */}
             {paymentError && (
               <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-start gap-3 font-semibold animate-in fade-in duration-200">
                 <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
@@ -338,7 +301,6 @@ export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: 
               </div>
             )}
 
-            {/* Action Execution Button */}
             <button
               onClick={handlePay}
               disabled={processing}
@@ -347,7 +309,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: 
               {processing ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Processing Payment Authorization...</span>
+                  <span>Processing Authorization...</span>
                 </>
               ) : (
                 <>
@@ -356,17 +318,15 @@ export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: 
                 </>
               )}
             </button>
-
+            
             <div className="text-center">
               <span className="text-[11px] text-slate-400 font-medium flex items-center justify-center gap-1">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                 <span>Encrypted transaction verified by central university records.</span>
               </span>
             </div>
-
           </div>
         </div>
-
       </main>
     </div>
   );

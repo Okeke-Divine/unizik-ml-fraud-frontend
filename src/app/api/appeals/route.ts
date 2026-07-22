@@ -95,7 +95,7 @@ export async function POST(req: Request) {
   }
 }
 
-// PATCH: Admin approves override and resets Invoice to PENDING
+// PATCH: Admin approves override or rejects with feedback notes
 export async function PATCH(req: Request) {
   try {
     const { appealId, status, adminNotes } = await req.json(); // status: 'APPROVED' | 'REJECTED'
@@ -111,7 +111,7 @@ export async function PATCH(req: Request) {
 
     // Execute atomic update
     await prisma.$transaction(async (tx) => {
-      // 1. Update Appeal state
+      // 1. Update Appeal state and save Bursar feedback notes
       await tx.appeal.update({
         where: { id: appealId },
         data: { status, adminNotes }
