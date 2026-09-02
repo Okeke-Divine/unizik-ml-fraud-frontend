@@ -75,26 +75,38 @@ export async function evaluatePaymentTransaction(
     let targetMismatch = payload.hardwareMismatch;
     let offPeakFlag = isOffPeakHourWAT();
 
+    // If caller provided explicit feature overrides (diagnostics panel edited fields), honor them
+    if ((payload as any).overrideFeatures) {
+      const o = (payload as any).overrideFeatures;
+      deviceStudentCount24h = o.device_student_count_24h ?? deviceStudentCount24h;
+      targetDwellTime = o.page_dwell_time_seconds ?? targetDwellTime;
+      targetAsn = o.is_high_risk_asn ?? targetAsn;
+      failedAttempts1h = o.failed_attempts_1h ?? failedAttempts1h;
+      targetMismatch = o.session_hardware_mismatch ?? targetMismatch;
+      offPeakFlag = o.is_off_peak_hour ?? offPeakFlag;
+    }
+
     // -------------------------------------------------------------------------
     // 2. AGGRESSIVE DEFENSE SIMULATION OVERRIDE (Forced Under-The-Hood Spoofing)
     // Why: When presenting, we cannot rely on a clean demo DB. We forcibly inject
     // extreme multi-variable vectors so Python & SQLite record unmistakable fraud.
     // -------------------------------------------------------------------------
+    // Backwards-compatible: small simMode presets still accepted but treated as input modifiers
     if (payload.simMode === 'BOT') {
-      deviceStudentCount24h = 65; // Massive cybercafe / proxy botnet velocity
-      failedAttempts1h = 14;      // Aggressive credential stuffing failure rate
-      targetDwellTime = 0.12;     // Sub-second automated script execution
-      targetAsn = 1;              // Unverified / VPN datacenter routing
-      offPeakFlag = 1;            // 2:15 AM WAT dead of night
+      deviceStudentCount24h = deviceStudentCount24h || 65;
+      failedAttempts1h = failedAttempts1h || 14;
+      targetDwellTime = targetDwellTime || 0.12;
+      targetAsn = targetAsn || 1;
+      offPeakFlag = offPeakFlag || 1;
     } else if (payload.simMode === 'SPOOF') {
-      deviceStudentCount24h = 24; // Multi-account hardware velocity
-      failedAttempts1h = 6;       // Multiple card testing drops
-      targetMismatch = 1;         // Complete session hijack / hardware mismatch
-      targetAsn = 1;              // Foreign VPN / proxy routing
+      deviceStudentCount24h = deviceStudentCount24h || 24;
+      failedAttempts1h = failedAttempts1h || 6;
+      targetMismatch = targetMismatch || 1;
+      targetAsn = targetAsn || 1;
     }
 
     // 3. CONSTRUCT THE ML FEATURE VECTOR
-    const mlPayload = {
+    const mlPayload: any = {
       device_student_count_24h: deviceStudentCount24h,
       page_dwell_time_seconds: targetDwellTime,
       is_high_risk_asn: targetAsn,
@@ -103,9 +115,14 @@ export async function evaluatePaymentTransaction(
       is_off_peak_hour: offPeakFlag,
     };
 
+    if ((payload as any).telemetry_source) {
+      mlPayload.telemetry_source = (payload as any).telemetry_source;
+    }
+
     console.log("--------------------------------------------------");
-    console.log(`[TELEMETRY (${payload.simMode || 'NORMAL'})] Sending 6-param vector to Python AI:`);
+    console.log(`[TELEMETRY (${(payload as any).simMode || 'NORMAL'})] Sending 6-param vector to Python AI:`);
     console.log(JSON.stringify(mlPayload, null, 2));
+    console.log("--- [FRAUD-ENGINE DEBUG] payload.overrideFeatures present:", !!(payload as any).overrideFeatures);
     console.log("--------------------------------------------------");
 
     // 4. DISPATCH TO PYTHON FLASK MICROSERVICE
@@ -144,26 +161,13 @@ export async function evaluatePaymentTransaction(
       console.error('[FRAUD ENGINE WARNING] AI Microservice unreachable. Engaging heuristic safety net:', mlError.message);
       isErrorFallback = true;
       
-      if (failedAttempts1h >= 9 || (targetMismatch === 1 && targetAsn === 1) || payload.simMode !== 'NORMAL') {
+      if (failedAttempts1h >= 9 || (targetMismatch === 1 && targetAsn === 1)) {
         aiVerdict = 'FRAUDULENT';
         aiConfidence = 0.9999;
         aiExplanation = 'BLOCKED BY FALLBACK HEURISTIC: High failure rate or session hijack detected while AI service was offline.';
       }
     }
-
-    // -------------------------------------------------------------------------
-    // 5. THESIS DEFENSE SAFETY GUARDRAIL (Absolute Presentation Guarantee)
-    // If the presenter selected BOT or SPOOF, but a poorly trained Python model
-    // STILL returned LEGITIMATE, we forcibly override it to FRAUDULENT so your demo never fails!
-    // -------------------------------------------------------------------------
-    if (payload.simMode && payload.simMode !== 'NORMAL' && aiVerdict === 'LEGITIMATE') {
-      console.warn("[DEFENSE GUARDRAIL] Python returned LEGITIMATE on an attack vector. Overriding to FRAUDULENT for live demo certainty!");
-      aiVerdict = 'FRAUDULENT';
-      aiConfidence = payload.simMode === 'BOT' ? 0.9985 : 0.9840;
-      aiExplanation = payload.simMode === 'BOT'
-        ? 'Automated Fraud Engine: Intercepted high-velocity script execution (0.12s dwell time) originating from an unverified ASN with 14 failed attempts in 1h.'
-        : 'Automated Fraud Engine: Detected critical hardware fingerprint mismatch (session spoofing) across 24 associated accounts on an unverified routing node.';
-    }
+    // NOTE: Removed forced-override guardrail to ensure ML verdicts remain authoritative.
 
     // 6. ATOMIC LEDGER EXECUTION
     const targetStatus: TransactionStatus =

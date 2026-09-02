@@ -5,6 +5,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { FileText, ArrowLeft, Shield, AlertCircle, RefreshCw, Lock, Check } from "lucide-react";
 import StudentHeader from "@/components/StudentHeader";
+import useRequireStudent from '@/lib/useRequireStudent';
 import BackButton from "@/components/BackButton";
 
 const FEE_OPTIONS = [
@@ -18,6 +19,7 @@ const FEE_OPTIONS = [
 export default function InvoiceGeneratorPage() {
   const router = useRouter();
   const [user, setUser] = useState<any | null>(null);
+  useRequireStudent();
   const [selectedCategory, setSelectedCategory] = useState("TUITION");
   const [session, setSession] = useState("2025/2026");
   const [loading, setLoading] = useState(false);

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Printer, CheckCircle2, Building2, QrCode, ShieldCheck, AlertCircle } from "lucide-react";
 import StudentHeader from "@/components/StudentHeader";
 import BackButton from "@/components/BackButton";
+import useRequireStudent from '@/lib/useRequireStudent';
 
 export default function ReceiptVerificationPage({ params }: { params: Promise<{ txId: string }> }) {
   const router = useRouter();
@@ -15,6 +16,8 @@ export default function ReceiptVerificationPage({ params }: { params: Promise<{ 
   const [invoice, setInvoice] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useRequireStudent();
 
   useEffect(() => {
     const storedUser = localStorage.getItem("unizik_user");

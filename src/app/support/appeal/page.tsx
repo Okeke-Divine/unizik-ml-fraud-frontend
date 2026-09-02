@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ShieldAlert, Send, CheckCircle2, AlertCircle, FileText } from "lucide-react";
 import StudentHeader from "@/components/StudentHeader";
 import BackButton from "@/components/BackButton";
+import useRequireStudent from '@/lib/useRequireStudent';
 
 function AppealForm() {
   const router = useRouter();
@@ -175,6 +176,8 @@ function AppealForm() {
 
 export default function AppealPage() {
   const [user, setUser] = useState<any | null>(null);
+
+  useRequireStudent();
 
   useEffect(() => {
     const stored = localStorage.getItem("unizik_user");

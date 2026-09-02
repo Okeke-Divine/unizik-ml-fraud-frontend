@@ -5,6 +5,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { CreditCard, FileText, Plus, CheckCircle, Clock, LogOut, User, ShieldCheck, AlertCircle, Shield, Cpu } from "lucide-react";
 import StudentHeader from "@/components/StudentHeader";
+import useRequireStudent from '@/lib/useRequireStudent';
 
 interface Invoice {
   id: string;
@@ -19,6 +20,7 @@ interface Invoice {
 export default function StudentDashboard() {
   const router = useRouter();
   const [user, setUser] = useState<any | null>(null);
+  useRequireStudent();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

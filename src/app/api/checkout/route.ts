@@ -17,6 +17,16 @@ const checkoutSchema = z.object({
   pageDwellTime: z.number().positive(),
   hardwareMismatch: z.number().int().min(0).max(1),
   simMode: z.enum(["NORMAL", "BOT", "SPOOF"]).optional().default("NORMAL"),
+  // Optional client-side diagnostics overrides (when panel is edited)
+  overrideFeatures: z.object({
+    device_student_count_24h: z.number().int().min(0).optional(),
+    page_dwell_time_seconds: z.number().optional(),
+    is_high_risk_asn: z.number().int().min(0).max(1).optional(),
+    failed_attempts_1h: z.number().int().min(0).optional(),
+    session_hardware_mismatch: z.number().int().min(0).max(1).optional(),
+    is_off_peak_hour: z.number().int().min(0).max(1).optional(),
+  }).optional(),
+  telemetry_source: z.enum(['SIMULATED','LIVE']).optional(),
 });
 
 /**
@@ -30,6 +40,11 @@ async function getNetworkRiskScore(ip: string): Promise<number> {
   try {
     const response = await fetch(`http://ip-api.com/json/${ip}?fields=status,isp,query`);
     const data = await response.json();
+
+      // Debug: log ip-api response so we can see the ISP string returned for this IP
+      try {
+        console.log('[NETWORK DETECTION] ip-api response for', ip, JSON.stringify(data));
+      } catch (e) {}
 
     if (data.status !== "success") return 1;
 
@@ -64,6 +79,22 @@ export async function POST(req: Request) {
       ipAddress,
       asnNumber,
     };
+
+    // Debugging aids: log incoming payload and whether overrideFeatures were included
+    try {
+      console.log('--- [CHECKOUT DEBUG] Incoming checkout payload ---');
+      console.log(JSON.stringify(payload, null, 2));
+      console.log('--- [CHECKOUT DEBUG] overrideFeatures present:', !!(payload as any).overrideFeatures);
+    } catch (e) {}
+
+    // If the client requested a simulated hardware mismatch, synthesize a different deviceId
+    try {
+      if ((payload as any).overrideFeatures && (payload as any).overrideFeatures.session_hardware_mismatch === 1) {
+        const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
+        (payload as any).deviceId = `UNIZIK_FP_${rand}`;
+        console.log('[CHECKOUT DEBUG] Synthesized deviceId for simulated mismatch:', (payload as any).deviceId);
+      }
+    } catch (e) {}
 
     // 1. FINANCIAL INTEGRITY GUARDRAIL
     const invoice = await prisma.feeInvoice.findUnique({ where: { id: payload.invoiceId } });
