@@ -38,7 +38,7 @@ export default function AdminHeader() {
       badge: pendingAppealsCount > 0 ? pendingAppealsCount : null 
     },
     // NEW: Simple, non-technical label for the Bursar
-    { label: "Campus Computers", href: "/admin/velocity", icon: Laptop },
+    // { label: "Campus Computers", href: "/admin/velocity", icon: Laptop },
   ];
 
   return (
