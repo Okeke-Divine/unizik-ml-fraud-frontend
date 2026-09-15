@@ -1,4 +1,3 @@
-// unizik-ml-fraud-frontend/src/app/admin/transactions/page.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -34,17 +33,17 @@ export default function AdminTransactionsPage() {
   const [selectedStatus, setSelectedStatus] = useState("ALL");
   const [selectedCategory, setSelectedCategory] = useState("ALL");
 
-  // pagniation
+  // Pagination States
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
 
-  // 1. Updated fetchLedger to set the total pages state
   const fetchLedger = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const queryParams = new URLSearchParams({ page: currentPage.toString() });
+      const queryParams = new URLSearchParams({ page: currentPage.toString(), limit: "15" });
       if (selectedStatus !== "ALL") queryParams.append("status", selectedStatus);
       if (selectedCategory !== "ALL") queryParams.append("category", selectedCategory);
       if (searchTerm.trim() !== "") queryParams.append("search", searchTerm.trim());
@@ -53,22 +52,18 @@ export default function AdminTransactionsPage() {
       const data = await res.json();
 
       if (res.ok && data.success) {
-        setTransactions(data.transactions);
-        setTotalPages(data.pages); // CRITICAL: Updates the page UI
+        setTransactions(data.transactions || []);
+        setTotalPages(data.pages || 1);
+        setTotalRecords(data.total || 0);
       } else {
         setError(data.error || "Failed to retrieve records.");
       }
     } catch (err) {
-      setError("Network error.");
+      setError("Network error. Please try again.");
     } finally {
       setLoading(false);
     }
-  }, [selectedStatus, selectedCategory, searchTerm, currentPage]); // Added currentPage dependency
-
-  // 2. Add this useEffect to trigger fetch when page changes
-  useEffect(() => {
-    fetchLedger();
-  }, [fetchLedger]);
+  }, [selectedStatus, selectedCategory, searchTerm, currentPage]);
 
   useEffect(() => {
     // Authorization Check
@@ -92,25 +87,29 @@ export default function AdminTransactionsPage() {
     setSearchTerm("");
     setSelectedStatus("ALL");
     setSelectedCategory("ALL");
+    setCurrentPage(1);
   };
 
-  // Dynamic Ledger Metrics based on active view
-  const totalClearedRevenue = transactions
-    .filter((tx) => tx.status === "CLEARED")
-    .reduce((sum, tx) => sum + (tx.amount || 0), 0);
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setCurrentPage(1);
+    fetchLedger();
+  };
 
-  const blockedCount = transactions.filter((tx) => tx.status === "BLOCKED").length;
+  // Dynamic Metrics based on current retrieved records
+  const totalClearedRevenue = transactions
+    .filter((tx) => tx.status === "CLEARED" || tx.status === "PAID")
+    .reduce((sum, tx) => sum + (tx.amount || tx.invoice?.amount || 0), 0);
+
+  const blockedCount = transactions.filter((tx) => tx.status === "BLOCKED" || tx.status === "DECLINED").length;
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-800 font-sans pb-16 selection:bg-[#001C3D] selection:text-white">
-
       <AdminHeader />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
-
         {/* Navigation Back Button */}
         <BackButton />
-
 
         {/* Page Title & Context Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
@@ -125,7 +124,10 @@ export default function AdminTransactionsPage() {
 
           <div className="flex items-center gap-2">
             <button
-              onClick={fetchLedger}
+              onClick={() => {
+                setCurrentPage(1);
+                fetchLedger();
+              }}
               disabled={loading}
               className="px-4 py-2.5 bg-white border border-slate-200 hover:border-slate-300 text-slate-700 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-2 cursor-pointer disabled:opacity-50"
             >
@@ -138,17 +140,17 @@ export default function AdminTransactionsPage() {
         {/* Dynamic Ledger Summary Bar */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <div className="bg-white border border-slate-200/80 p-4 rounded-xl shadow-2xs flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Filtered Records</span>
-            <span className="text-lg font-extrabold text-[#001C3D] font-mono">{transactions.length}</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Count</span>
+            <span className="text-lg font-extrabold text-[#001C3D] font-mono">{totalRecords}</span>
           </div>
           <div className="bg-white border border-slate-200/80 p-4 rounded-xl shadow-2xs flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Cleared Revenue View</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Page Cleared Revenue</span>
             <span className="text-lg font-extrabold text-emerald-600 font-mono">
               ₦{totalClearedRevenue.toLocaleString("en-NG", { minimumFractionDigits: 2 })}
             </span>
           </div>
           <div className="bg-white border border-slate-200/80 p-4 rounded-xl shadow-2xs flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Intercepted Attempts</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Page Interceptions</span>
             <span className="text-lg font-extrabold text-rose-600 font-mono">{blockedCount}</span>
           </div>
         </div>
@@ -170,7 +172,7 @@ export default function AdminTransactionsPage() {
             )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+          <form onSubmit={handleSearchSubmit} className="grid grid-cols-1 md:grid-cols-12 gap-4">
             {/* Search Box */}
             <div className="md:col-span-6 relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -181,7 +183,6 @@ export default function AdminTransactionsPage() {
                 placeholder="Search by Matric No., Student Name, or Payment Ref..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && fetchLedger()}
                 className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-[#001C3D] transition-all"
               />
             </div>
@@ -190,7 +191,10 @@ export default function AdminTransactionsPage() {
             <div className="md:col-span-3">
               <select
                 value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
+                onChange={(e) => {
+                  setSelectedStatus(e.target.value);
+                  setCurrentPage(1);
+                }}
                 className="block w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:bg-white focus:border-[#001C3D] transition-all cursor-pointer"
               >
                 {STATUS_OPTIONS.map((opt) => (
@@ -203,7 +207,10 @@ export default function AdminTransactionsPage() {
             <div className="md:col-span-3">
               <select
                 value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
+                onChange={(e) => {
+                  setSelectedCategory(e.target.value);
+                  setCurrentPage(1);
+                }}
                 className="block w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:bg-white focus:border-[#001C3D] transition-all cursor-pointer"
               >
                 {FEE_CATEGORIES.map((cat) => (
@@ -211,7 +218,7 @@ export default function AdminTransactionsPage() {
                 ))}
               </select>
             </div>
-          </div>
+          </form>
         </div>
 
         {/* Error Notification */}
@@ -278,7 +285,7 @@ export default function AdminTransactionsPage() {
                         </td>
 
                         <td className="py-4 px-6 font-semibold text-slate-700 whitespace-nowrap">
-                          {tx.invoice?.category?.replace("_", " ") || "General Fee"}
+                          {tx.invoice?.category?.replace(/_/g, " ") || "General Fee"}
                         </td>
 
                         <td className="py-4 px-6 font-mono text-slate-600 font-bold whitespace-nowrap">
@@ -317,7 +324,7 @@ export default function AdminTransactionsPage() {
                           </span>
                         </td>
 
-                        {/* action cell */}
+                        {/* Action Cell */}
                         <td className="py-4 px-6 text-right whitespace-nowrap">
                           <div className="flex items-center justify-end gap-2">
                             {isSuccess && (
@@ -331,10 +338,11 @@ export default function AdminTransactionsPage() {
                             )}
                             <button
                               onClick={() => router.push(`/admin/forensics/${tx.id}`)}
-                              className={`px-3 py-1.5 font-bold rounded-lg text-[11px] transition-all inline-flex items-center gap-1 cursor-pointer shadow-2xs ${isBlocked
-                                ? "bg-rose-600 hover:bg-rose-700 text-white shadow-rose-500/20"
-                                : "bg-[#001C3D] hover:bg-[#00152e] text-white"
-                                }`}
+                              className={`px-3 py-1.5 font-bold rounded-lg text-[11px] transition-all inline-flex items-center gap-1 cursor-pointer shadow-2xs ${
+                                isBlocked
+                                  ? "bg-rose-600 hover:bg-rose-700 text-white shadow-rose-500/20"
+                                  : "bg-[#001C3D] hover:bg-[#00152e] text-white"
+                              }`}
                               title="Inspect White-Box AI Forensics"
                             >
                               <span>Forensics</span>
@@ -349,26 +357,28 @@ export default function AdminTransactionsPage() {
               </tbody>
             </table>
 
+            {/* Pagination Controls */}
             <div className="flex items-center justify-between p-4 border-t border-slate-100">
               <button
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage(p => p - 1)}
-                className="px-4 py-2 border rounded-xl text-xs font-bold disabled:opacity-50"
+                disabled={currentPage <= 1 || loading}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                className="px-4 py-2 border border-slate-200 hover:border-slate-300 rounded-xl text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 Previous
               </button>
-              <span className="text-xs font-bold">Page {currentPage} of {totalPages}</span>
+              <span className="text-xs font-bold text-slate-600">
+                Page {currentPage} of {totalPages}
+              </span>
               <button
-                disabled={currentPage === totalPages}
-                onClick={() => setCurrentPage(p => p + 1)}
-                className="px-4 py-2 border rounded-xl text-xs font-bold disabled:opacity-50"
+                disabled={currentPage >= totalPages || loading}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                className="px-4 py-2 border border-slate-200 hover:border-slate-300 rounded-xl text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 Next
               </button>
             </div>
           </div>
         </div>
-
       </main>
     </div>
   );

@@ -31,8 +31,10 @@ export async function GET(
           orderBy: { createdAt: 'desc' },
           take: 1,
         },
+        student: true,
       },
     });
+    console.log(invoice)
 
     if (!invoice) {
       return NextResponse.json(
