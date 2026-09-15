@@ -12,6 +12,9 @@ type DiagnosticsValues = {
   session_hardware_mismatch?: number | null;
   is_off_peak_hour?: number | null;
   deviceId?: string | null;
+  asn_debug_ip?: string | null;
+  asn_debug_isp?: string | null;
+  asn_debug_source?: string | null;
 };
 
 type DiagnosticsContextType = {
@@ -23,12 +26,15 @@ type DiagnosticsContextType = {
 
 const defaultValues: DiagnosticsValues = {
   device_student_count_24h: 1,
-  page_dwell_time_seconds: 65.0,
+  page_dwell_time_seconds: 0.1,
   is_high_risk_asn: 0,
   failed_attempts_1h: 0,
   session_hardware_mismatch: 0,
   is_off_peak_hour: 0,
   deviceId: null,
+  asn_debug_ip: null,
+  asn_debug_isp: null,
+  asn_debug_source: null,
 };
 
 const DiagnosticsContext = createContext<DiagnosticsContextType>({
@@ -46,7 +52,31 @@ export default function DiagnosticsPanel() {
   const [open, setOpen] = useState(false);
   const [values, setValues] = useState<DiagnosticsValues>(defaultValues);
   const editedRef = useRef<Record<string, boolean>>({});
+  const valuesRef = useRef<DiagnosticsValues>(defaultValues);
+  const pageStartRef = useRef<number>(0);
+  const serverFetchIdRef = useRef<number>(0);
   const [isEditedFlag, setIsEditedFlag] = useState(false);
+
+  const getBaselineLoginDeviceId = () => {
+    try {
+      const explicit = localStorage.getItem('unizik_login_device');
+      if (explicit) return explicit;
+      const userRaw = localStorage.getItem('unizik_user');
+      const user = userRaw ? JSON.parse(userRaw) : undefined;
+      return user?.loginDeviceId || null;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const getClientOffPeakFlag = () => {
+    const now = new Date();
+    const hour = now.getHours();
+    const minute = now.getMinutes();
+    if (hour >= 1 && hour < 4) return 1;
+    if (hour === 4 && minute <= 30) return 1;
+    return 0;
+  };
 
   // Helper to set field and mark edited
   const setField = (k: keyof DiagnosticsValues, v: any) => {
@@ -57,9 +87,10 @@ export default function DiagnosticsPanel() {
 
   // Persist immediately when a field is changed to avoid race where checkout reads stale localStorage
   const setFieldAndPersist = (k: keyof DiagnosticsValues, v: any) => {
-    setField(k, v);
+    editedRef.current[k as string] = true;
+    setIsEditedFlag(true);
     try {
-      const next = { ...values, [k]: v } as DiagnosticsValues;
+      const next = { ...valuesRef.current, [k]: v } as DiagnosticsValues;
 
       // If user toggles hardware mismatch, reflect that in the stored device id so both UI and checkout use it
       if (k === 'session_hardware_mismatch') {
@@ -70,13 +101,15 @@ export default function DiagnosticsPanel() {
             localStorage.setItem('unizik_device_id', spoof);
             next.deviceId = spoof;
           } else {
-            const baseline = localStorage.getItem('unizik_login_device') || localStorage.getItem('unizik_device_id') || next.deviceId || undefined;
+            const baseline = getBaselineLoginDeviceId() || localStorage.getItem('unizik_device_id') || next.deviceId || undefined;
             if (baseline) localStorage.setItem('unizik_device_id', baseline);
             next.deviceId = baseline as any;
           }
         } catch (e) {}
       }
 
+      setValues(next);
+      valuesRef.current = next;
       localStorage.setItem('unizik_diag_values', JSON.stringify(next));
       localStorage.setItem('unizik_diag_edited', JSON.stringify(true));
     } catch (e) {}
@@ -85,19 +118,21 @@ export default function DiagnosticsPanel() {
   const clearEdits = async () => {
     editedRef.current = {};
     setIsEditedFlag(false);
-    try { localStorage.removeItem('unizik_diag_edited'); } catch (e) {}
-    // refresh server telemetry immediately and persist
-    await fetchServerTelemetry();
     try {
-      localStorage.setItem('unizik_diag_values', JSON.stringify(values));
       localStorage.setItem('unizik_diag_edited', JSON.stringify(false));
+      const baseline = getBaselineLoginDeviceId();
+      if (baseline) localStorage.setItem('unizik_device_id', baseline);
     } catch (e) {}
+    // refresh server telemetry immediately and persist
+    refreshClientTelemetry();
+    await fetchServerTelemetry();
   };
 
   // Fetch server-side telemetry for the current device/student
   const fetchServerTelemetry = async () => {
     try {
-      const deviceId = localStorage.getItem('unizik_device_id') || undefined;
+      const requestId = ++serverFetchIdRef.current;
+      const deviceId = localStorage.getItem('unizik_device_id') || valuesRef.current.deviceId || undefined;
       const userRaw = localStorage.getItem('unizik_user');
       const user = userRaw ? JSON.parse(userRaw) : undefined;
       const studentId = user?.id;
@@ -106,52 +141,44 @@ export default function DiagnosticsPanel() {
       if (deviceId) params.set('deviceId', deviceId);
       if (studentId) params.set('studentId', studentId);
 
-      const res = await fetch(`/api/telemetry?${params.toString()}`);
+      const res = await fetch(`/api/telemetry?${params.toString()}`, { cache: 'no-store' });
       if (!res.ok) return;
       const d = await res.json();
+      if (requestId !== serverFetchIdRef.current) return;
       // Only apply server values to fields that are not edited
       setValues((s) => ({
         ...s,
         device_student_count_24h: editedRef.current['device_student_count_24h'] ? s.device_student_count_24h : d.device_student_count_24h,
         failed_attempts_1h: editedRef.current['failed_attempts_1h'] ? s.failed_attempts_1h : d.failed_attempts_1h,
         is_high_risk_asn: editedRef.current['is_high_risk_asn'] ? s.is_high_risk_asn : d.is_high_risk_asn,
+        asn_debug_ip: d?.asn_debug?.ip || null,
+        asn_debug_isp: d?.asn_debug?.isp || null,
+        asn_debug_source: d?.asn_debug?.source || null,
       }));
     } catch (e) {
       // ignore
     }
   };
 
-  // Fetch client-side telemetry (deviceId, dwell time, hardware mismatch)
-  const fetchClientTelemetry = async () => {
+  // Refresh client-side telemetry (deviceId, dwell time, hardware mismatch, off-peak)
+  const refreshClientTelemetry = async () => {
     try {
       const fp = await generateDeviceFingerprint();
-      const stored = localStorage.getItem('unizik_device_id');
-      if (!stored) localStorage.setItem('unizik_device_id', fp);
-      // Simple dwell-time estimate based on performance
-      const dwell = Math.max(0.1, ((performance.now() - (window as any).__unizik_page_start_ms || performance.now())) / 1000);
-
-      // Attempt to detect public ISP (client-side) so Diagnostics shows ASN risk immediately when VPN changes
-      let clientIsHighRisk = 0;
-      try {
-        const resp = await fetch('http://ip-api.com/json/?fields=status,isp,query');
-        if (resp.ok) {
-          const info = await resp.json();
-          const ispName = (info.isp || '').toUpperCase();
-          const telcos = ["MTN", "GLOBACOM", "AIRTEL", "9MOBILE", "ETISALAT"];
-          const isLocalTelco = telcos.some(t => ispName.includes(t));
-          clientIsHighRisk = isLocalTelco ? 0 : 1;
-        }
-      } catch (e) {
-        // ignore client-side lookup failures
-      }
+      const activeDeviceId = localStorage.getItem('unizik_device_id') || valuesRef.current.deviceId || null;
+      const baselineDeviceId = getBaselineLoginDeviceId();
+      const dwell = Math.max(0.1, (performance.now() - pageStartRef.current) / 1000);
+      const offPeak = getClientOffPeakFlag();
 
       setValues((s) => ({
         ...s,
-        deviceId: fp,
-        page_dwell_time_seconds: editedRef.current['page_dwell_time_seconds'] ? s.page_dwell_time_seconds : Number(dwell.toFixed(2)),
-        session_hardware_mismatch: editedRef.current['session_hardware_mismatch'] ? s.session_hardware_mismatch : (localStorage.getItem('unizik_login_device') && localStorage.getItem('unizik_login_device') !== fp ? 1 : 0),
-        // only apply client-side ASN decision when user hasn't edited the server-aggregated ASN field
-        is_high_risk_asn: editedRef.current['is_high_risk_asn'] ? s.is_high_risk_asn : clientIsHighRisk,
+        deviceId: activeDeviceId,
+        page_dwell_time_seconds: editedRef.current['page_dwell_time_seconds']
+          ? s.page_dwell_time_seconds
+          : Number(Math.max(Number(s.page_dwell_time_seconds || 0), dwell).toFixed(2)),
+        session_hardware_mismatch: editedRef.current['session_hardware_mismatch']
+          ? s.session_hardware_mismatch
+          : (baselineDeviceId && activeDeviceId && baselineDeviceId !== activeDeviceId ? 1 : 0),
+        is_off_peak_hour: editedRef.current['is_off_peak_hour'] ? s.is_off_peak_hour : offPeak,
       }));
     } catch (e) {
       // ignore
@@ -159,21 +186,32 @@ export default function DiagnosticsPanel() {
   };
 
   useEffect(() => {
-    // always reset page start marker on panel mount (checkout dwell should reset per navigation)
-    (window as any).__unizik_page_start_ms = performance.now();
+    let mounted = true;
+    pageStartRef.current = performance.now();
 
-    // initial fetch
-    fetchClientTelemetry();
-    fetchServerTelemetry();
+    const init = async () => {
+      const fp = await generateDeviceFingerprint();
+      if (!mounted) return;
 
-    // client telemetry (dwell + hardware) every 1s for responsive dwell updates
+      const baseline = getBaselineLoginDeviceId();
+      if (baseline) localStorage.setItem('unizik_login_device', baseline);
+
+      localStorage.setItem('unizik_device_id', fp);
+
+      refreshClientTelemetry();
+      fetchServerTelemetry();
+    };
+
+    init();
+
+    // client telemetry every 1s for responsive live updates
     // Persist initial snapshot so checkout reads a stable object even before edits
     try {
       localStorage.setItem('unizik_diag_values', JSON.stringify(values));
       localStorage.setItem('unizik_diag_edited', JSON.stringify(isEditedFlag));
     } catch (e) {}
     const clientId = setInterval(() => {
-      fetchClientTelemetry();
+      refreshClientTelemetry();
     }, 1000);
 
     // server telemetry every 5s
@@ -182,6 +220,7 @@ export default function DiagnosticsPanel() {
     }, 5000);
 
     return () => {
+      mounted = false;
       clearInterval(clientId);
       clearInterval(serverId);
     };
@@ -189,6 +228,7 @@ export default function DiagnosticsPanel() {
 
   // Persist diagnostics to localStorage so checkout can read current panel values
   useEffect(() => {
+    valuesRef.current = values;
     try {
       localStorage.setItem('unizik_diag_values', JSON.stringify(values));
       localStorage.setItem('unizik_diag_edited', JSON.stringify(isEditedFlag));
@@ -282,6 +322,9 @@ export default function DiagnosticsPanel() {
                   <option value={0}>0</option>
                   <option value={1}>1</option>
                 </select>
+              </div>
+              <div className="text-[11px] text-slate-500 leading-snug bg-slate-50 border border-slate-200 rounded-lg p-2">
+                ASN Live Source: {values.asn_debug_source || 'n/a'} | ISP: {values.asn_debug_isp || 'n/a'} | IP: {values.asn_debug_ip || 'n/a'}
               </div>
               <div className="flex items-center gap-2">
                 <label className="text-xs w-44">Off-Peak</label>

@@ -13,6 +13,7 @@ export interface PaymentInitiationRequest {
   asnNumber: number; 
   pageDwellTime: number; 
   hardwareMismatch: number;
+  clientOffPeakHour?: number;
   simMode?: "NORMAL" | "BOT" | "SPOOF";
 }
 
@@ -73,7 +74,7 @@ export async function evaluatePaymentTransaction(
     let targetDwellTime = payload.pageDwellTime;
     let targetAsn = payload.asnNumber;
     let targetMismatch = payload.hardwareMismatch;
-    let offPeakFlag = isOffPeakHourWAT();
+    let offPeakFlag = typeof payload.clientOffPeakHour === 'number' ? payload.clientOffPeakHour : isOffPeakHourWAT();
 
     // If caller provided explicit feature overrides (diagnostics panel edited fields), honor them
     if ((payload as any).overrideFeatures) {

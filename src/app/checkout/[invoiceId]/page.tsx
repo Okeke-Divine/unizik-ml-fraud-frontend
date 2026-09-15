@@ -94,17 +94,27 @@ export default function CheckoutPage({ params }: { params: Promise<{ invoiceId: 
     const currentEditedRaw = localStorage.getItem('unizik_diag_edited');
     const currentDiag = currentDiagRaw ? JSON.parse(currentDiagRaw) : {};
     const currentEdited = currentEditedRaw ? JSON.parse(currentEditedRaw) : false;
+    const runtimeDeviceId = localStorage.getItem('unizik_device_id') || deviceId;
 
     const realDwellTime = (performance.now() - startTime.current) / 1000;
+    const liveOffPeak = (() => {
+      const now = new Date();
+      const hour = now.getHours();
+      const minute = now.getMinutes();
+      if (hour >= 1 && hour < 4) return 1;
+      if (hour === 4 && minute <= 30) return 1;
+      return 0;
+    })();
 
     const payload = {
       studentId: user.id,
       invoiceId: invoiceId,
       amount: invoice.amount || 0,
       reference: `PAY_${Date.now().toString(36).toUpperCase()}_${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
-      deviceId: currentDiag.deviceId || deviceId,
+      deviceId: runtimeDeviceId,
       pageDwellTime: currentDiag.page_dwell_time_seconds ?? realDwellTime,
       hardwareMismatch: currentDiag.session_hardware_mismatch ?? mismatch,
+      clientOffPeakHour: currentDiag.is_off_peak_hour ?? liveOffPeak,
       // If the diagnostics panel has edits, include explicit feature overrides and mark source SIMULATED
       overrideFeatures: currentEdited ? {
         device_student_count_24h: currentDiag.device_student_count_24h,

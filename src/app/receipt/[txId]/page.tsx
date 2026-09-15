@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Printer, CheckCircle2, Building2, QrCode, ShieldCheck, AlertCircle } from "lucide-react";
 import StudentHeader from "@/components/StudentHeader";
 import BackButton from "@/components/BackButton";
-import useRequireStudent from '@/lib/useRequireStudent';
 
 export default function ReceiptVerificationPage({ params }: { params: Promise<{ txId: string }> }) {
   const router = useRouter();
@@ -16,8 +15,6 @@ export default function ReceiptVerificationPage({ params }: { params: Promise<{ 
   const [invoice, setInvoice] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  useRequireStudent();
 
   useEffect(() => {
     const storedUser = localStorage.getItem("unizik_user");
@@ -80,7 +77,7 @@ export default function ReceiptVerificationPage({ params }: { params: Promise<{ 
   }
 
   // Generate zero-dependency QR code pointing to this exact verification URL
-  const verificationUrl = typeof window !== "undefined" ? window.location.href : `https://portal.unizik.edu.ng/receipt/${txId}`;
+  const verificationUrl = typeof window !== "undefined" ? window.location.href : `${process.env.BASE_URL}/receipt/${txId}`;
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(verificationUrl)}&color=001C3D`;
 
   const paymentDate = new Date(invoice.createdAt || Date.now()).toLocaleDateString("en-NG", {
@@ -93,6 +90,9 @@ export default function ReceiptVerificationPage({ params }: { params: Promise<{ 
 
   const receiptNumber = `REC-${invoice.id.substring(0, 8).toUpperCase()}`;
   const transactionRef = invoice.transactions?.[0]?.reference || `TRX-${txId.substring(0, 10).toUpperCase()}`;
+  
+  // SECURE PAYLOAD: Force the receipt to use the database record, not local storage
+  const receiptStudent = invoice.student || {};
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-800 font-sans pb-16 selection:bg-[#001C3D] selection:text-white print:bg-white print:pb-0">
@@ -177,19 +177,21 @@ export default function ReceiptVerificationPage({ params }: { params: Promise<{ 
               </span>
               <div className="flex justify-between py-1">
                 <span className="text-slate-500 font-medium">Student Name:</span>
-                <span className="font-bold text-slate-900">{user?.name || "Verified Student"}</span>
+                <span className="font-bold text-slate-900">
+                  {receiptStudent?.lastName} {receiptStudent?.firstName}
+                </span>
               </div>
               <div className="flex justify-between py-1">
                 <span className="text-slate-500 font-medium">Matriculation No:</span>
-                <span className="font-mono font-bold text-[#001C3D]">{user?.matricNumber || "N/A"}</span>
+                <span className="font-mono font-bold text-[#001C3D]">{receiptStudent?.matricNumber || "N/A"}</span>
               </div>
               <div className="flex justify-between py-1">
                 <span className="text-slate-500 font-medium">Department:</span>
-                <span className="font-semibold text-slate-700">{user?.department || "Computer Science"}</span>
+                <span className="font-semibold text-slate-700">{receiptStudent?.department || "Computer Science"}</span>
               </div>
               <div className="flex justify-between py-1">
                 <span className="text-slate-500 font-medium">Academic Level:</span>
-                <span className="font-semibold text-slate-700">{user?.level ? `${user.level} Level` : "Undergraduate"}</span>
+                <span className="font-semibold text-slate-700">{receiptStudent?.level ? `${receiptStudent.level} Level` : "Undergraduate"}</span>
               </div>
             </div>
 
