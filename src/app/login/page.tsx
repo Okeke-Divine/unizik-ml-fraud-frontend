@@ -26,10 +26,18 @@ export default function LoginPage() {
     setError(null);
 
     try {
+      const effectiveDeviceId = (!deviceId || deviceId.startsWith("HARVESTING_"))
+        ? await generateDeviceFingerprint()
+        : deviceId;
+
+      if (effectiveDeviceId !== deviceId) {
+        setDeviceId(effectiveDeviceId);
+      }
+
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ matricNumber, password, deviceId, isAdmin }),
+        body: JSON.stringify({ matricNumber, password, deviceId: effectiveDeviceId, isAdmin }),
       });
 
       const data = await res.json();
@@ -40,6 +48,9 @@ export default function LoginPage() {
           role: data.role || data.user?.role || (isAdmin ? "BURSARY_DIRECTOR" : "STUDENT")
         };
         localStorage.setItem("unizik_user", JSON.stringify(userProfile));
+        if (!isAdmin && userProfile.loginDeviceId) {
+          localStorage.setItem("unizik_login_device", userProfile.loginDeviceId);
+        }
         
         // Redirect to appropriate domain
         if (userProfile.role === "ADMIN" || userProfile.role === "BURSARY_DIRECTOR") {
